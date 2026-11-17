@@ -1,0 +1,989 @@
+{
+  "hitlMap": {},
+  "workspace": {
+    "scenarioId": "faulty-demo",
+    "enterprise": {
+      "name": "FPT Corporation (CTCP FPT)",
+      "ticker": "FPT",
+      "exchange": "HOSE",
+      "statementType": "Consolidated Financial Statements (BCTC Hợp nhất)",
+      "reportingPeriod": "FY2025",
+      "auditor": "Deloitte Vietnam (Audited Reference)"
+    },
+    "sellerAgentId": "seller-agent-fpt-ir-01",
+    "buyerAgentId": "buyer-agent-institutional-09",
+    "sellerClaims": [
+      {
+        "claimId": "CLM-01",
+        "metricCode": "NET_REVENUE",
+        "metricNameEn": "Net Revenue from Sales & Services",
+        "metricNameVi": "Doanh thu thuần bán hàng và cung cấp dịch vụ",
+        "category": "Income Statement",
+        "sellerValue": 62849,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceRef": "BCTC Hợp nhất FY2025 - KQKD (Mã 10, trang 7)",
+        "sellerCommentaryEn": "Matches audited consolidated revenue for FY2025.",
+        "sellerCommentaryVi": "Khớp doanh thu thuần hợp nhất đã kiểm toán năm 2025."
+      },
+      {
+        "claimId": "CLM-02",
+        "metricCode": "GROSS_PROFIT",
+        "metricNameEn": "Gross Profit",
+        "metricNameVi": "Lợi nhuận gộp về bán hàng và cung cấp dịch vụ",
+        "category": "Income Statement",
+        "sellerValue": 23757,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "formulaNote": "62,849 - 39,092 = 23,757 tỷ VND",
+        "sourceRef": "BCTC Hợp nhất FY2025 - KQKD (Mã 20, trang 7)",
+        "sellerCommentaryEn": "Consistent with net revenue minus cost of goods sold.",
+        "sellerCommentaryVi": "Phù hợp công thức Doanh thu thuần trừ Giá vốn."
+      },
+      {
+        "claimId": "CLM-03",
+        "metricCode": "GROSS_MARGIN",
+        "metricNameEn": "Gross Profit Margin",
+        "metricNameVi": "Biên lợi nhuận gộp",
+        "category": "Financial Ratio",
+        "sellerValue": 41.5,
+        "unit": "%",
+        "period": "FY2025",
+        "formulaNote": "Reported 41.5% in Seller executive deck",
+        "sourceRef": "Seller Pitch Summary Slide 4 (citing BCTC FY2025)",
+        "sellerCommentaryEn": "Claimed gross margin expansion to 41.5%.",
+        "sellerCommentaryVi": "Seller báo cáo biên lợi nhuận gộp đạt 41.5%."
+      },
+      {
+        "claimId": "CLM-04",
+        "metricCode": "PAT_PARENT",
+        "metricNameEn": "Net Profit After Tax (Parent Shareholders)",
+        "metricNameVi": "Lợi nhuận sau thuế của cổ đông công ty mẹ",
+        "category": "Income Statement",
+        "sellerValue": 7857000,
+        "unit": "triệu VND",
+        "period": "FY2025",
+        "sourceRef": "BCTC Hợp nhất FY2025 - KQKD (Mã 61, trang 8)",
+        "sellerCommentaryEn": "Submitted in million VND instead of standard billion VND.",
+        "sellerCommentaryVi": "Gửi theo đơn vị triệu VND thay vì chuẩn tỷ VND."
+      },
+      {
+        "claimId": "CLM-05",
+        "metricCode": "TOTAL_ASSETS",
+        "metricNameEn": "Total Assets (Ending Balance)",
+        "metricNameVi": "Tổng cộng tài sản (Số cuối năm)",
+        "category": "Balance Sheet",
+        "sellerValue": 72003,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceRef": "BCTC Hợp nhất FY2025 - CĐKT (Mã 270, trang 4)",
+        "sellerCommentaryEn": "Exact ending balance sheet total assets.",
+        "sellerCommentaryVi": "Khớp tổng cộng tài sản cuối kỳ."
+      },
+      {
+        "claimId": "CLM-06",
+        "metricCode": "TOTAL_EQUITY",
+        "metricNameEn": "Owners' Equity (Ending Balance)",
+        "metricNameVi": "Vốn chủ sở hữu (Số cuối năm)",
+        "category": "Balance Sheet",
+        "sellerValue": 29930,
+        "unit": "tỷ VND",
+        "period": "Q3/2025",
+        "sourceRef": "BCTC Hợp nhất Q3/2025 (Mã 400)",
+        "sellerCommentaryEn": "Legacy Q3/2025 equity snapshot included by mistake.",
+        "sellerCommentaryVi": "Số liệu vốn chủ sở hữu từ kỳ Q3/2025."
+      },
+      {
+        "claimId": "CLM-07",
+        "metricCode": "TOTAL_LIABILITIES",
+        "metricNameEn": "Total Liabilities",
+        "metricNameVi": "Tổng nợ phải trả",
+        "category": "Balance Sheet",
+        "sellerValue": 36218,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceRef": "",
+        "sellerCommentaryEn": "Value entered manually without footnote or filing link.",
+        "sellerCommentaryVi": "Giá trị nhập tay, chưa đính kèm nguồn đối chiếu."
+      },
+      {
+        "claimId": "CLM-08",
+        "metricCode": "DEBT_TO_EQUITY",
+        "metricNameEn": "Total Liabilities to Equity Ratio",
+        "metricNameVi": "Hệ số Nợ phải trả / Vốn chủ sở hữu",
+        "category": "Financial Ratio",
+        "sellerValue": 0.84,
+        "unit": "lần",
+        "period": "FY2025",
+        "formulaNote": "Claimed D/E = 0.84x",
+        "sourceRef": "BCTC Hợp nhất FY2025 - Chỉ tiêu đòn bẩy",
+        "sellerCommentaryEn": "Understated leverage ratio presented to buyer.",
+        "sellerCommentaryVi": "Báo cáo hệ số đòn bẩy thấp hơn thực tế."
+      },
+      {
+        "claimId": "CLM-09",
+        "metricCode": "OPERATING_CASH_FLOW",
+        "metricNameEn": "Net Cash Flow from Operating Activities",
+        "metricNameVi": "Lưu chuyển tiền thuần từ hoạt động kinh doanh",
+        "category": "Cash Flow",
+        "sellerValue": 11420,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceRef": "BCTC Hợp nhất FY2025 - LCTT (Mã 20, trang 9)",
+        "sellerCommentaryEn": "Verified against Consolidated Cash Flow Statement.",
+        "sellerCommentaryVi": "Khớp Lưu chuyển tiền thuần HĐKD trên báo cáo LCTT."
+      },
+      {
+        "claimId": "CLM-10",
+        "metricCode": "PROVISION_CONTINGENT_ADJ",
+        "metricNameEn": "Adjusted EBITDA (excl. One-off R&D Provision)",
+        "metricNameVi": "EBITDA điều chỉnh (loại trừ dự phòng R&D bất thường)",
+        "category": "Financial Ratio",
+        "sellerValue": 14500,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "formulaNote": "14,180 + 320 one-off R&D add-back",
+        "sourceRef": "Thuyết minh V.28 (trang 34) & Phụ lục quản trị nội bộ",
+        "sellerCommentaryEn": "Includes 320 tỷ VND management add-back for one-off R&D software restructuring.",
+        "sellerCommentaryVi": "Cộng thêm 320 tỷ VND điều chỉnh quản trị cho dự phòng tái cấu trúc R&D."
+      }
+    ],
+    "groundTruth": [
+      {
+        "claimId": "CLM-01",
+        "metricCode": "NET_REVENUE",
+        "metricNameEn": "Net Revenue from Sales & Services",
+        "metricNameVi": "Doanh thu thuần bán hàng và cung cấp dịch vụ",
+        "category": "Income Statement",
+        "standardValue": 62849,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceDocument": "BCTC Hợp nhất FY2025 - Báo cáo KQKD",
+        "sourcePageRef": "Mục 01, Mã số 10, trang 7",
+        "tolerancePercent": 0.5
+      },
+      {
+        "claimId": "CLM-02",
+        "metricCode": "GROSS_PROFIT",
+        "metricNameEn": "Gross Profit",
+        "metricNameVi": "Lợi nhuận gộp về bán hàng và cung cấp dịch vụ",
+        "category": "Income Statement",
+        "standardValue": 23757,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "formulaExpression": "NET_REVENUE - COGS",
+        "formulaOperands": {
+          "NET_REVENUE": 62849,
+          "COGS": 39092
+        },
+        "sourceDocument": "BCTC Hợp nhất FY2025 - Báo cáo KQKD",
+        "sourcePageRef": "Mục 05, Mã số 20, trang 7",
+        "tolerancePercent": 0.5
+      },
+      {
+        "claimId": "CLM-03",
+        "metricCode": "GROSS_MARGIN",
+        "metricNameEn": "Gross Profit Margin",
+        "metricNameVi": "Biên lợi nhuận gộp",
+        "category": "Financial Ratio",
+        "standardValue": 37.8,
+        "unit": "%",
+        "period": "FY2025",
+        "formulaExpression": "(GROSS_PROFIT / NET_REVENUE) * 100",
+        "formulaOperands": {
+          "GROSS_PROFIT": 23757,
+          "NET_REVENUE": 62849
+        },
+        "sourceDocument": "Thuyết minh BCTC Hợp nhất FY2025 & Tính toán chuẩn",
+        "sourcePageRef": "Tính từ Mã số 20 / Mã số 10, trang 7",
+        "tolerancePercent": 0.5
+      },
+      {
+        "claimId": "CLM-04",
+        "metricCode": "PAT_PARENT",
+        "metricNameEn": "Net Profit After Tax (Parent Shareholders)",
+        "metricNameVi": "Lợi nhuận sau thuế của cổ đông công ty mẹ",
+        "category": "Income Statement",
+        "standardValue": 7857,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceDocument": "BCTC Hợp nhất FY2025 - Báo cáo KQKD",
+        "sourcePageRef": "Mã số 61, trang 8",
+        "tolerancePercent": 0.5
+      },
+      {
+        "claimId": "CLM-05",
+        "metricCode": "TOTAL_ASSETS",
+        "metricNameEn": "Total Assets (Ending Balance)",
+        "metricNameVi": "Tổng cộng tài sản (Số cuối năm)",
+        "category": "Balance Sheet",
+        "standardValue": 72003,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceDocument": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán",
+        "sourcePageRef": "Mã số 270, trang 4",
+        "tolerancePercent": 0.5
+      },
+      {
+        "claimId": "CLM-06",
+        "metricCode": "TOTAL_EQUITY",
+        "metricNameEn": "Owners' Equity (Ending Balance)",
+        "metricNameVi": "Vốn chủ sở hữu (Số cuối năm)",
+        "category": "Balance Sheet",
+        "standardValue": 35785,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceDocument": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán",
+        "sourcePageRef": "Mã số 400, trang 6",
+        "tolerancePercent": 0.5
+      },
+      {
+        "claimId": "CLM-07",
+        "metricCode": "TOTAL_LIABILITIES",
+        "metricNameEn": "Total Liabilities",
+        "metricNameVi": "Tổng nợ phải trả",
+        "category": "Balance Sheet",
+        "standardValue": 36218,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "formulaExpression": "TOTAL_ASSETS - TOTAL_EQUITY",
+        "formulaOperands": {
+          "TOTAL_ASSETS": 72003,
+          "TOTAL_EQUITY": 35785
+        },
+        "sourceDocument": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán",
+        "sourcePageRef": "Mã số 300, trang 5",
+        "tolerancePercent": 0.5
+      },
+      {
+        "claimId": "CLM-08",
+        "metricCode": "DEBT_TO_EQUITY",
+        "metricNameEn": "Total Liabilities to Equity Ratio",
+        "metricNameVi": "Hệ số Nợ phải trả / Vốn chủ sở hữu",
+        "category": "Financial Ratio",
+        "standardValue": 1.01,
+        "unit": "lần",
+        "period": "FY2025",
+        "formulaExpression": "TOTAL_LIABILITIES / TOTAL_EQUITY",
+        "formulaOperands": {
+          "TOTAL_LIABILITIES": 36218,
+          "TOTAL_EQUITY": 35785
+        },
+        "sourceDocument": "BCTC Hợp nhất FY2025 - Chỉ tiêu đòn bẩy",
+        "sourcePageRef": "Mã số 300 / Mã số 400, trang 5-6",
+        "tolerancePercent": 1
+      },
+      {
+        "claimId": "CLM-09",
+        "metricCode": "OPERATING_CASH_FLOW",
+        "metricNameEn": "Net Cash Flow from Operating Activities",
+        "metricNameVi": "Lưu chuyển tiền thuần từ hoạt động kinh doanh",
+        "category": "Cash Flow",
+        "standardValue": 11420,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceDocument": "BCTC Hợp nhất FY2025 - Báo cáo LCTT",
+        "sourcePageRef": "Mã số 20, trang 9",
+        "tolerancePercent": 0.5
+      },
+      {
+        "claimId": "CLM-10",
+        "metricCode": "PROVISION_CONTINGENT_ADJ",
+        "metricNameEn": "Adjusted EBITDA (excl. One-off R&D Provision)",
+        "metricNameVi": "EBITDA điều chỉnh (loại trừ dự phòng R&D bất thường)",
+        "category": "Financial Ratio",
+        "standardValue": 14180,
+        "unit": "tỷ VND",
+        "period": "FY2025",
+        "sourceDocument": "Thuyết minh BCTC Hợp nhất FY2025 - Mục 28 Dự phòng & Chi phí khác",
+        "sourcePageRef": "Thuyết minh V.28, trang 34",
+        "tolerancePercent": 0.5,
+        "hitlThresholdPercent": 3,
+        "requiresAuditorJudgment": true,
+        "judgmentNoteEn": "Seller included a 320 tỷ VND non-recurring R&D software capitalization add-back (2.26% variance). Requires human auditor judgment under VAS 21 / IAS 38 disclosure.",
+        "judgmentNoteVi": "Seller cộng ngược 320 tỷ VND chi phí dự phòng vốn hóa R&D không thường xuyên (chênh lệch 2.26%). Cần kiểm toán viên duyệt thủ công theo thuyết minh VAS 21."
+      }
+    ],
+    "evidenceReport": {
+      "reportId": "RPT-FPT-2025-001",
+      "enterpriseName": "FPT Corporation (CTCP FPT)",
+      "ticker": "FPT",
+      "exchange": "HOSE",
+      "statementType": "Consolidated Financial Statements (BCTC Hợp nhất)",
+      "reportingPeriod": "FY2025",
+      "sellerAgentId": "seller-agent-fpt-ir-01",
+      "buyerAgentId": "buyer-agent-institutional-09",
+      "generatedAt": "2026-11-17T19:43:21.002Z",
+      "summary": {
+        "totalClaims": 10,
+        "verifiedCount": 4,
+        "mismatchCount": 4,
+        "insufficientEvidenceCount": 1,
+        "needsHumanReviewCount": 1,
+        "overallVerdict": "Pending HITL"
+      },
+      "reportHash": "0x4030c0e51b3627d49ff3d72b885cb15808bf0c9fbad45cd43eebe6a8427ea1df",
+      "claims": [
+        {
+          "claimId": "CLM-01",
+          "metricCode": "NET_REVENUE",
+          "metricNameEn": "Net Revenue from Sales & Services",
+          "metricNameVi": "Doanh thu thuần bán hàng và cung cấp dịch vụ",
+          "category": "Income Statement",
+          "sellerValue": 62849,
+          "sellerUnit": "tỷ VND",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "BCTC Hợp nhất FY2025 - KQKD (Mã 10, trang 7)",
+          "standardValue": 62849,
+          "standardUnit": "tỷ VND",
+          "standardPeriod": "FY2025",
+          "standardSource": "BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mục 01, Mã số 10, trang 7)",
+          "varianceAbs": 0,
+          "variancePct": 0,
+          "autoStatus": "Verified",
+          "finalStatus": "Verified",
+          "reasonEn": "Verified against BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mục 01, Mã số 10, trang 7).",
+          "reasonVi": "Khớp dữ liệu chuẩn từ BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mục 01, Mã số 10, trang 7).",
+          "faultType": "None",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mục 01, Mã số 10, trang 7)",
+              "actual": "BCTC Hợp nhất FY2025 - KQKD (Mã 10, trang 7)",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "tỷ VND",
+              "actual": "tỷ VND",
+              "messageEn": "Unit matches standard (tỷ VND).",
+              "messageVi": "Đơn vị tính khớp chuẩn (tỷ VND)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "skip",
+              "expected": "Direct line-item (no derived formula)",
+              "actual": "Direct figure",
+              "messageEn": "Direct audited ledger item; no derived formula required.",
+              "messageVi": "Chỉ tiêu trực tiếp trên BCTC; không cần công thức phái sinh."
+            },
+            {
+              "rule": "Value",
+              "outcome": "pass",
+              "expected": "62849 tỷ VND",
+              "actual": "62849 tỷ VND",
+              "messageEn": "Value matches ground truth within 0.5% tolerance.",
+              "messageVi": "Số liệu khớp giá trị chuẩn (sai số trong ngưỡng 0.5%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-02",
+          "metricCode": "GROSS_PROFIT",
+          "metricNameEn": "Gross Profit",
+          "metricNameVi": "Lợi nhuận gộp về bán hàng và cung cấp dịch vụ",
+          "category": "Income Statement",
+          "sellerValue": 23757,
+          "sellerUnit": "tỷ VND",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "BCTC Hợp nhất FY2025 - KQKD (Mã 20, trang 7)",
+          "standardValue": 23757,
+          "standardUnit": "tỷ VND",
+          "standardPeriod": "FY2025",
+          "standardSource": "BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mục 05, Mã số 20, trang 7)",
+          "varianceAbs": 0,
+          "variancePct": 0,
+          "autoStatus": "Verified",
+          "finalStatus": "Verified",
+          "reasonEn": "Verified against BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mục 05, Mã số 20, trang 7).",
+          "reasonVi": "Khớp dữ liệu chuẩn từ BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mục 05, Mã số 20, trang 7).",
+          "faultType": "None",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mục 05, Mã số 20, trang 7)",
+              "actual": "BCTC Hợp nhất FY2025 - KQKD (Mã 20, trang 7)",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "tỷ VND",
+              "actual": "tỷ VND",
+              "messageEn": "Unit matches standard (tỷ VND).",
+              "messageVi": "Đơn vị tính khớp chuẩn (tỷ VND)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "pass",
+              "expected": "NET_REVENUE - COGS = 23757 tỷ VND",
+              "actual": "23757 tỷ VND",
+              "messageEn": "Formula check passed (NET_REVENUE - COGS).",
+              "messageVi": "Công thức hợp lệ (NET_REVENUE - COGS)."
+            },
+            {
+              "rule": "Value",
+              "outcome": "pass",
+              "expected": "23757 tỷ VND",
+              "actual": "23757 tỷ VND",
+              "messageEn": "Value matches ground truth within 0.5% tolerance.",
+              "messageVi": "Số liệu khớp giá trị chuẩn (sai số trong ngưỡng 0.5%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-03",
+          "metricCode": "GROSS_MARGIN",
+          "metricNameEn": "Gross Profit Margin",
+          "metricNameVi": "Biên lợi nhuận gộp",
+          "category": "Financial Ratio",
+          "sellerValue": 41.5,
+          "sellerUnit": "%",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "Seller Pitch Summary Slide 4 (citing BCTC FY2025)",
+          "standardValue": 37.8,
+          "standardUnit": "%",
+          "standardPeriod": "FY2025",
+          "standardSource": "Thuyết minh BCTC Hợp nhất FY2025 & Tính toán chuẩn (Tính từ Mã số 20 / Mã số 10, trang 7)",
+          "varianceAbs": 3.7,
+          "variancePct": 9.79,
+          "autoStatus": "Mismatch",
+          "finalStatus": "Mismatch",
+          "reasonEn": "Formula verification failed ((GROSS_PROFIT / NET_REVENUE) * 100 = 37.8 %, Seller reported 41.5 %).",
+          "reasonVi": "Sai công thức chỉ tiêu ((GROSS_PROFIT / NET_REVENUE) * 100 = 37.8 %, Seller nộp 41.5 %).",
+          "faultType": "Formula Error",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "Thuyết minh BCTC Hợp nhất FY2025 & Tính toán chuẩn (Tính từ Mã số 20 / Mã số 10, trang 7)",
+              "actual": "Seller Pitch Summary Slide 4 (citing BCTC FY2025)",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "%",
+              "actual": "%",
+              "messageEn": "Unit matches standard (%).",
+              "messageVi": "Đơn vị tính khớp chuẩn (%)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "fail",
+              "expected": "(GROSS_PROFIT / NET_REVENUE) * 100 = 37.8 %",
+              "actual": "41.5 %",
+              "messageEn": "Formula check failed: (GROSS_PROFIT / NET_REVENUE) * 100 yields 37.8 %.",
+              "messageVi": "Sai công thức: (GROSS_PROFIT / NET_REVENUE) * 100 cho kết quả 37.8 %."
+            },
+            {
+              "rule": "Value",
+              "outcome": "fail",
+              "expected": "37.8 %",
+              "actual": "41.5 %",
+              "messageEn": "Value deviates by 9.79% (exceeds 0.5% tolerance).",
+              "messageVi": "Sai lệch số liệu 9.79% (vượt ngưỡng 0.5%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-04",
+          "metricCode": "PAT_PARENT",
+          "metricNameEn": "Net Profit After Tax (Parent Shareholders)",
+          "metricNameVi": "Lợi nhuận sau thuế của cổ đông công ty mẹ",
+          "category": "Income Statement",
+          "sellerValue": 7857000,
+          "sellerUnit": "triệu VND",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "BCTC Hợp nhất FY2025 - KQKD (Mã 61, trang 8)",
+          "standardValue": 7857,
+          "standardUnit": "tỷ VND",
+          "standardPeriod": "FY2025",
+          "standardSource": "BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mã số 61, trang 8)",
+          "varianceAbs": 7849143,
+          "variancePct": 99900,
+          "autoStatus": "Mismatch",
+          "finalStatus": "Mismatch",
+          "reasonEn": "Unit mismatch: Seller reported in \"triệu VND\" instead of \"tỷ VND\", causing scale discrepancy.",
+          "reasonVi": "Sai đơn vị tính: Seller dùng \"triệu VND\" thay vì \"tỷ VND\".",
+          "faultType": "Wrong Unit",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "BCTC Hợp nhất FY2025 - Báo cáo KQKD (Mã số 61, trang 8)",
+              "actual": "BCTC Hợp nhất FY2025 - KQKD (Mã 61, trang 8)",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "fail",
+              "expected": "tỷ VND",
+              "actual": "triệu VND",
+              "messageEn": "Unit mismatch: Seller used \"triệu VND\" instead of \"tỷ VND\".",
+              "messageVi": "Sai đơn vị tính: Seller dùng \"triệu VND\" thay vì \"tỷ VND\"."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "skip",
+              "expected": "Direct line-item (no derived formula)",
+              "actual": "Direct figure",
+              "messageEn": "Direct audited ledger item; no derived formula required.",
+              "messageVi": "Chỉ tiêu trực tiếp trên BCTC; không cần công thức phái sinh."
+            },
+            {
+              "rule": "Value",
+              "outcome": "fail",
+              "expected": "7857 tỷ VND",
+              "actual": "7857000 triệu VND",
+              "messageEn": "Value deviates by 99900% (exceeds 0.5% tolerance).",
+              "messageVi": "Sai lệch số liệu 99900% (vượt ngưỡng 0.5%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-05",
+          "metricCode": "TOTAL_ASSETS",
+          "metricNameEn": "Total Assets (Ending Balance)",
+          "metricNameVi": "Tổng cộng tài sản (Số cuối năm)",
+          "category": "Balance Sheet",
+          "sellerValue": 72003,
+          "sellerUnit": "tỷ VND",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "BCTC Hợp nhất FY2025 - CĐKT (Mã 270, trang 4)",
+          "standardValue": 72003,
+          "standardUnit": "tỷ VND",
+          "standardPeriod": "FY2025",
+          "standardSource": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán (Mã số 270, trang 4)",
+          "varianceAbs": 0,
+          "variancePct": 0,
+          "autoStatus": "Verified",
+          "finalStatus": "Verified",
+          "reasonEn": "Verified against BCTC Hợp nhất FY2025 - Bảng cân đối kế toán (Mã số 270, trang 4).",
+          "reasonVi": "Khớp dữ liệu chuẩn từ BCTC Hợp nhất FY2025 - Bảng cân đối kế toán (Mã số 270, trang 4).",
+          "faultType": "None",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán (Mã số 270, trang 4)",
+              "actual": "BCTC Hợp nhất FY2025 - CĐKT (Mã 270, trang 4)",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "tỷ VND",
+              "actual": "tỷ VND",
+              "messageEn": "Unit matches standard (tỷ VND).",
+              "messageVi": "Đơn vị tính khớp chuẩn (tỷ VND)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "skip",
+              "expected": "Direct line-item (no derived formula)",
+              "actual": "Direct figure",
+              "messageEn": "Direct audited ledger item; no derived formula required.",
+              "messageVi": "Chỉ tiêu trực tiếp trên BCTC; không cần công thức phái sinh."
+            },
+            {
+              "rule": "Value",
+              "outcome": "pass",
+              "expected": "72003 tỷ VND",
+              "actual": "72003 tỷ VND",
+              "messageEn": "Value matches ground truth within 0.5% tolerance.",
+              "messageVi": "Số liệu khớp giá trị chuẩn (sai số trong ngưỡng 0.5%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-06",
+          "metricCode": "TOTAL_EQUITY",
+          "metricNameEn": "Owners' Equity (Ending Balance)",
+          "metricNameVi": "Vốn chủ sở hữu (Số cuối năm)",
+          "category": "Balance Sheet",
+          "sellerValue": 29930,
+          "sellerUnit": "tỷ VND",
+          "sellerPeriod": "Q3/2025",
+          "sellerSourceRef": "BCTC Hợp nhất Q3/2025 (Mã 400)",
+          "standardValue": 35785,
+          "standardUnit": "tỷ VND",
+          "standardPeriod": "FY2025",
+          "standardSource": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán (Mã số 400, trang 6)",
+          "varianceAbs": -5855,
+          "variancePct": -16.36,
+          "autoStatus": "Mismatch",
+          "finalStatus": "Mismatch",
+          "reasonEn": "Reporting period mismatch: Seller reported \"Q3/2025\" while standard scope is \"FY2025\".",
+          "reasonVi": "Sai kỳ báo cáo: Seller nộp kỳ \"Q3/2025\", kỳ chuẩn là \"FY2025\".",
+          "faultType": "Wrong Period",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán (Mã số 400, trang 6)",
+              "actual": "BCTC Hợp nhất Q3/2025 (Mã 400)",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "fail",
+              "expected": "FY2025",
+              "actual": "Q3/2025",
+              "messageEn": "Period mismatch: Seller submitted Q3/2025 instead of FY2025.",
+              "messageVi": "Sai kỳ báo cáo: Seller nộp kỳ Q3/2025 thay vì FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "tỷ VND",
+              "actual": "tỷ VND",
+              "messageEn": "Unit matches standard (tỷ VND).",
+              "messageVi": "Đơn vị tính khớp chuẩn (tỷ VND)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "skip",
+              "expected": "Direct line-item (no derived formula)",
+              "actual": "Direct figure",
+              "messageEn": "Direct audited ledger item; no derived formula required.",
+              "messageVi": "Chỉ tiêu trực tiếp trên BCTC; không cần công thức phái sinh."
+            },
+            {
+              "rule": "Value",
+              "outcome": "fail",
+              "expected": "35785 tỷ VND",
+              "actual": "29930 tỷ VND",
+              "messageEn": "Value deviates by -16.36% (exceeds 0.5% tolerance).",
+              "messageVi": "Sai lệch số liệu -16.36% (vượt ngưỡng 0.5%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-07",
+          "metricCode": "TOTAL_LIABILITIES",
+          "metricNameEn": "Total Liabilities",
+          "metricNameVi": "Tổng nợ phải trả",
+          "category": "Balance Sheet",
+          "sellerValue": 36218,
+          "sellerUnit": "tỷ VND",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "",
+          "standardValue": 36218,
+          "standardUnit": "tỷ VND",
+          "standardPeriod": "FY2025",
+          "standardSource": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán (Mã số 300, trang 5)",
+          "varianceAbs": 0,
+          "variancePct": 0,
+          "autoStatus": "Insufficient Evidence",
+          "finalStatus": "Insufficient Evidence",
+          "reasonEn": "Missing source citation or document reference; insufficient evidence to verify.",
+          "reasonVi": "Thiếu nguồn dẫn chứng đối chiếu (Insufficient Evidence).",
+          "faultType": "Missing Source",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "fail",
+              "expected": "BCTC Hợp nhất FY2025 - Bảng cân đối kế toán (Mã số 300, trang 5)",
+              "actual": "Missing / Empty citation",
+              "messageEn": "No verifiable source document or page reference provided.",
+              "messageVi": "Thiếu nguồn dẫn chứng hoặc mã tham chiếu tài liệu."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "tỷ VND",
+              "actual": "tỷ VND",
+              "messageEn": "Unit matches standard (tỷ VND).",
+              "messageVi": "Đơn vị tính khớp chuẩn (tỷ VND)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "pass",
+              "expected": "TOTAL_ASSETS - TOTAL_EQUITY = 36218 tỷ VND",
+              "actual": "36218 tỷ VND",
+              "messageEn": "Formula check passed (TOTAL_ASSETS - TOTAL_EQUITY).",
+              "messageVi": "Công thức hợp lệ (TOTAL_ASSETS - TOTAL_EQUITY)."
+            },
+            {
+              "rule": "Value",
+              "outcome": "pass",
+              "expected": "36218 tỷ VND",
+              "actual": "36218 tỷ VND",
+              "messageEn": "Value matches ground truth within 0.5% tolerance.",
+              "messageVi": "Số liệu khớp giá trị chuẩn (sai số trong ngưỡng 0.5%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-08",
+          "metricCode": "DEBT_TO_EQUITY",
+          "metricNameEn": "Total Liabilities to Equity Ratio",
+          "metricNameVi": "Hệ số Nợ phải trả / Vốn chủ sở hữu",
+          "category": "Financial Ratio",
+          "sellerValue": 0.84,
+          "sellerUnit": "lần",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "BCTC Hợp nhất FY2025 - Chỉ tiêu đòn bẩy",
+          "standardValue": 1.01,
+          "standardUnit": "lần",
+          "standardPeriod": "FY2025",
+          "standardSource": "BCTC Hợp nhất FY2025 - Chỉ tiêu đòn bẩy (Mã số 300 / Mã số 400, trang 5-6)",
+          "varianceAbs": -0.17,
+          "variancePct": -16.83,
+          "autoStatus": "Mismatch",
+          "finalStatus": "Mismatch",
+          "reasonEn": "Formula verification failed (TOTAL_LIABILITIES / TOTAL_EQUITY = 1.01 lần, Seller reported 0.84 lần).",
+          "reasonVi": "Sai công thức chỉ tiêu (TOTAL_LIABILITIES / TOTAL_EQUITY = 1.01 lần, Seller nộp 0.84 lần).",
+          "faultType": "Formula Error",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "BCTC Hợp nhất FY2025 - Chỉ tiêu đòn bẩy (Mã số 300 / Mã số 400, trang 5-6)",
+              "actual": "BCTC Hợp nhất FY2025 - Chỉ tiêu đòn bẩy",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "lần",
+              "actual": "lần",
+              "messageEn": "Unit matches standard (lần).",
+              "messageVi": "Đơn vị tính khớp chuẩn (lần)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "fail",
+              "expected": "TOTAL_LIABILITIES / TOTAL_EQUITY = 1.01 lần",
+              "actual": "0.84 lần",
+              "messageEn": "Formula check failed: TOTAL_LIABILITIES / TOTAL_EQUITY yields 1.01 lần.",
+              "messageVi": "Sai công thức: TOTAL_LIABILITIES / TOTAL_EQUITY cho kết quả 1.01 lần."
+            },
+            {
+              "rule": "Value",
+              "outcome": "fail",
+              "expected": "1.01 lần",
+              "actual": "0.84 lần",
+              "messageEn": "Value deviates by -16.83% (exceeds 1% tolerance).",
+              "messageVi": "Sai lệch số liệu -16.83% (vượt ngưỡng 1%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-09",
+          "metricCode": "OPERATING_CASH_FLOW",
+          "metricNameEn": "Net Cash Flow from Operating Activities",
+          "metricNameVi": "Lưu chuyển tiền thuần từ hoạt động kinh doanh",
+          "category": "Cash Flow",
+          "sellerValue": 11420,
+          "sellerUnit": "tỷ VND",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "BCTC Hợp nhất FY2025 - LCTT (Mã 20, trang 9)",
+          "standardValue": 11420,
+          "standardUnit": "tỷ VND",
+          "standardPeriod": "FY2025",
+          "standardSource": "BCTC Hợp nhất FY2025 - Báo cáo LCTT (Mã số 20, trang 9)",
+          "varianceAbs": 0,
+          "variancePct": 0,
+          "autoStatus": "Verified",
+          "finalStatus": "Verified",
+          "reasonEn": "Verified against BCTC Hợp nhất FY2025 - Báo cáo LCTT (Mã số 20, trang 9).",
+          "reasonVi": "Khớp dữ liệu chuẩn từ BCTC Hợp nhất FY2025 - Báo cáo LCTT (Mã số 20, trang 9).",
+          "faultType": "None",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "BCTC Hợp nhất FY2025 - Báo cáo LCTT (Mã số 20, trang 9)",
+              "actual": "BCTC Hợp nhất FY2025 - LCTT (Mã 20, trang 9)",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "tỷ VND",
+              "actual": "tỷ VND",
+              "messageEn": "Unit matches standard (tỷ VND).",
+              "messageVi": "Đơn vị tính khớp chuẩn (tỷ VND)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "skip",
+              "expected": "Direct line-item (no derived formula)",
+              "actual": "Direct figure",
+              "messageEn": "Direct audited ledger item; no derived formula required.",
+              "messageVi": "Chỉ tiêu trực tiếp trên BCTC; không cần công thức phái sinh."
+            },
+            {
+              "rule": "Value",
+              "outcome": "pass",
+              "expected": "11420 tỷ VND",
+              "actual": "11420 tỷ VND",
+              "messageEn": "Value matches ground truth within 0.5% tolerance.",
+              "messageVi": "Số liệu khớp giá trị chuẩn (sai số trong ngưỡng 0.5%)."
+            }
+          ],
+          "hitlResolution": null
+        },
+        {
+          "claimId": "CLM-10",
+          "metricCode": "PROVISION_CONTINGENT_ADJ",
+          "metricNameEn": "Adjusted EBITDA (excl. One-off R&D Provision)",
+          "metricNameVi": "EBITDA điều chỉnh (loại trừ dự phòng R&D bất thường)",
+          "category": "Financial Ratio",
+          "sellerValue": 14500,
+          "sellerUnit": "tỷ VND",
+          "sellerPeriod": "FY2025",
+          "sellerSourceRef": "Thuyết minh V.28 (trang 34) & Phụ lục quản trị nội bộ",
+          "standardValue": 14180,
+          "standardUnit": "tỷ VND",
+          "standardPeriod": "FY2025",
+          "standardSource": "Thuyết minh BCTC Hợp nhất FY2025 - Mục 28 Dự phòng & Chi phí khác (Thuyết minh V.28, trang 34)",
+          "varianceAbs": 320,
+          "variancePct": 2.26,
+          "autoStatus": "Needs Human Review",
+          "finalStatus": "Needs Human Review",
+          "reasonEn": "Seller included a 320 tỷ VND non-recurring R&D software capitalization add-back (2.26% variance). Requires human auditor judgment under VAS 21 / IAS 38 disclosure.",
+          "reasonVi": "Seller cộng ngược 320 tỷ VND chi phí dự phòng vốn hóa R&D không thường xuyên (chênh lệch 2.26%). Cần kiểm toán viên duyệt thủ công theo thuyết minh VAS 21.",
+          "faultType": "Auditor Judgment",
+          "rules": [
+            {
+              "rule": "Source",
+              "outcome": "pass",
+              "expected": "Thuyết minh BCTC Hợp nhất FY2025 - Mục 28 Dự phòng & Chi phí khác (Thuyết minh V.28, trang 34)",
+              "actual": "Thuyết minh V.28 (trang 34) & Phụ lục quản trị nội bộ",
+              "messageEn": "Verifiable source citation provided.",
+              "messageVi": "Có nguồn dẫn chứng đối chiếu hợp lệ."
+            },
+            {
+              "rule": "Period",
+              "outcome": "pass",
+              "expected": "FY2025",
+              "actual": "FY2025",
+              "messageEn": "Reporting period matches FY2025.",
+              "messageVi": "Kỳ báo cáo khớp chuẩn FY2025."
+            },
+            {
+              "rule": "Unit",
+              "outcome": "pass",
+              "expected": "tỷ VND",
+              "actual": "tỷ VND",
+              "messageEn": "Unit matches standard (tỷ VND).",
+              "messageVi": "Đơn vị tính khớp chuẩn (tỷ VND)."
+            },
+            {
+              "rule": "Formula",
+              "outcome": "skip",
+              "expected": "Direct line-item (no derived formula)",
+              "actual": "14,180 + 320 one-off R&D add-back",
+              "messageEn": "Direct audited ledger item; no derived formula required.",
+              "messageVi": "Chỉ tiêu trực tiếp trên BCTC; không cần công thức phái sinh."
+            },
+            {
+              "rule": "Value",
+              "outcome": "warn",
+              "expected": "14180 tỷ VND",
+              "actual": "14500 tỷ VND",
+              "messageEn": "Value deviates by 2.26% (within judgment review band <= 3%).",
+              "messageVi": "Chênh lệch 2.26% nằm trong vùng cần người duyệt (<= 3%)."
+            }
+          ],
+          "hitlResolution": null
+        }
+      ]
+    },
+    "fujiAnchor": null,
+    "anchorHistory": [],
+    "buyerDecision": {
+      "decision": "Pending",
+      "buyerName": "VietCap Institutional Desk",
+      "note": "",
+      "decidedAt": null
+    },
+    "lastUpdatedAt": "2026-11-17T19:43:21.002Z"
+  }
+}
