@@ -12,6 +12,7 @@ import {
 import { StatusBadge } from '../components/StatusBadge';
 import type { AppRoute } from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
+import { parseApiJson } from '../lib/apiClient';
 import type {
   HumanReviewRecord,
   ReportRecord,
@@ -144,10 +145,10 @@ export function VerificationPage({
           body: JSON.stringify(bodyPayload),
         },
       );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Lưu đánh giá HITL thất bại.');
-      }
+      const data = await parseApiJson<{ report?: ReportRecord }>(
+        res,
+        'Lưu đánh giá HITL thất bại.',
+      );
 
       if (data.report) {
         onReportUpdated(data.report as ReportRecord);

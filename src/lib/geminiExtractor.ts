@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import type { FinancialClaimInput, ReportType } from '../types/stockproof.ts';
 
 const TARGET_METRICS = [
@@ -23,6 +23,9 @@ export interface ExtractionContext {
   currency: string;
   unit: string;
   sourceDocument: string;
+  pageCount?: number;
+  isScannedPdf?: boolean;
+  pdfBase64?: string;
 }
 
 export interface ExtractionResult {
@@ -150,8 +153,19 @@ export async function extractFinancialClaims(
   // 2. Ngược lại dùng Gemini API (phía máy chủ) để trích xuất chỉ tiêu có cấu trúc
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    if (ctx.isScannedPdf) {
+      throw new Error(
+        `Tệp "${ctx.sourceDocument}" là PDF dạng ảnh scan (${ctx.pageCount ?? '?'} trang, không có lớp văn bản để trích xuất trực tiếp). Hãy cấu hình GEMINI_API_KEY trong bảng Settings > Secrets để bật OCR đa phương thức, hoặc tải lên tệp PDF có lớp văn bản / Excel / CSV.`,
+      );
+    }
     throw new Error(
-      'Chưa cấu hình GEMINI_API_KEY trong biến môi trường máy chủ. Hãy tải lên tệp CSV/JSON có cấu trúc hoặc cấu hình GEMINI_API_KEY để trích xuất PDF tự động.',
+      'Chưa cấu hình GEMINI_API_KEY trong biến môi trường máy chủ. Hãy tải lên tệp CSV/JSON/Excel có cấu trúc hoặc cấu hình GEMINI_API_KEY để trích xuất PDF tự động.',
+    );
+  }
+
+  if (ctx.isScannedPdf && !ctx.pdfBase64) {
+    throw new Error(
+      'Tệp PDF dạng ảnh scan nhưng thiếu dữ liệu nhị phân để gửi OCR đa phương thức.',
     );
   }
 
@@ -164,7 +178,7 @@ export async function extractFinancialClaims(
     },
   });
 
-  const prompt = `Trích xuất các chỉ tiêu tài chính có cấu trúc từ nội dung báo cáo sau bằng tiếng Việt.
+  const prompt = `Trích xuất các chỉ tiêu tài chính có cấu trúc từ báo cáo tài chính sau (hỗ trợ cả tiếng Việt và tiếng Anh theo chuẩn VAS/Thông tư 200).
 Doanh nghiệp: ${ctx.companyName}
 Kỳ báo cáo dự kiến: ${ctx.period}
 Loại báo cáo dự kiến: ${ctx.reportType}
@@ -172,50 +186,127 @@ Tiền tệ mặc định: ${ctx.currency}
 Đơn vị mặc định: ${ctx.unit}
 Tên tệp nguồn: ${ctx.sourceDocument}
 
-Ưu tiên trích xuất 10 chỉ tiêu sau nếu xuất hiện rõ ràng trong văn bản:
+Ưu tiên trích xuất và chuẩn hóa tên chỉ tiêu sang danh sách tiếng Việt sau nếu xuất hiện trong báo cáo (kể cả khi bản gốc viết bằng tiếng Anh như Net revenue, Cost of sales, Gross profit, Net operating profit, Net profit after tax, Total assets, Liabilities, Owners' equity, Net cash flows from operating activities):
 ${TARGET_METRICS.map((m, i) => `${i + 1}. ${m}`).join('\n')}
 
 Quy tắc bắt buộc:
-- Chỉ trích xuất số liệu và trích dẫn thực sự có trong văn bản.
+- Chỉ trích xuất số liệu và trích dẫn thực sự nhìn thấy/đọc được trong tài liệu.
 - TUYỆT ĐỐI KHÔNG tự bịa, đoán hoặc nội suy số liệu thiếu. Nếu thiếu hoặc mơ hồ, đặt uncertain=true và reported_value=null.
-- Gắn đúng số [Trang N], tên bảng/mục trong source_location và đoạn trích dẫn nguyên văn vào evidence.
-- Nhận diện chính xác đơn vị (VND, Triệu VND, Tỷ VND, %) và kỳ báo cáo thể hiện trong văn bản.
+- Gắn đúng số trang thực tế của tệp PDF vào source_page, tên bảng/mục (ví dụ: Separate Statement of Income - Code 10) vào source_location, và đoạn trích dẫn nguyên văn vào evidence.
+- Nhận diện chính xác đơn vị hiển thị trong bảng (VND, Triệu VND, Tỷ VND, %) và kỳ báo cáo (nếu là báo cáo năm cho kỳ dự kiến "${ctx.period}" như "năm kết thúc 31/12/2024" hay "2024" thì ghi thống nhất "${ctx.period}"; chỉ ghi kỳ khác như Q3/2025 nếu số liệu thực sự là báo cáo quý/năm khác) cũng như loại báo cáo ("Separate" nếu là Báo cáo riêng / Separate financial statements, "Consolidated" nếu là Hợp nhất).
 - Phân loại rõ "financial_metric" (chỉ tiêu số liệu), "financial_ratio" (tỷ lệ/tăng trưởng), và "subjective_claim" (nhận định chủ quan/mơ hồ).
 
-Nội dung tài liệu:
-${ctx.extractedText.slice(0, 40000)}`;
+${ctx.isScannedPdf ? 'Tài liệu được đính kèm trực tiếp dưới dạng PDF scan nhiều trang. Hãy đọc toàn bộ các bảng báo cáo tài chính chính (Bảng cân đối kế toán, Báo cáo kết quả hoạt động kinh doanh, Báo cáo lưu chuyển tiền tệ) để trích xuất chính xác.' : `Nội dung tài liệu:\n${ctx.extractedText.slice(0, 40000)}`}`;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-4-hydrogen',
-    contents: prompt,
-    config: {
-      systemInstruction:
-        'Bạn là bộ máy trích xuất dữ liệu tài chính nghiêm ngặt. Trích xuất chỉ tiêu tài chính sang JSON mà không tự sửa đổi hay bịa số liệu.',
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            metric: { type: Type.STRING },
-            claim_type: { type: Type.STRING },
-            period: { type: Type.STRING },
-            report_type: { type: Type.STRING },
-            reported_value: { type: Type.NUMBER, nullable: true },
-            currency: { type: Type.STRING },
-            unit: { type: Type.STRING },
-            formula: { type: Type.STRING, nullable: true },
-            source_page: { type: Type.INTEGER, nullable: true },
-            source_location: { type: Type.STRING },
-            evidence: { type: Type.STRING },
-            uncertain: { type: Type.BOOLEAN },
-            ambiguous_reason: { type: Type.STRING, nullable: true },
-          },
-          required: ['metric', 'period', 'unit', 'source_location', 'evidence'],
+  const contents =
+    ctx.isScannedPdf && ctx.pdfBase64
+      ? {
+          parts: [
+            {
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: ctx.pdfBase64,
+              },
+            },
+            { text: prompt },
+          ],
+        }
+      : prompt;
+
+  const requestConfig = {
+    thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+    systemInstruction:
+      'Bạn là bộ máy trích xuất dữ liệu tài chính nghiêm ngặt (hỗ trợ OCR PDF đa phương thức cho BCTC Việt Nam song ngữ Anh/Việt). Trích xuất chỉ tiêu tài chính sang JSON mà không tự sửa đổi hay bịa số liệu.',
+    responseMimeType: 'application/json',
+    responseSchema: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          metric: { type: Type.STRING },
+          claim_type: { type: Type.STRING },
+          period: { type: Type.STRING },
+          report_type: { type: Type.STRING },
+          reported_value: { type: Type.NUMBER, nullable: true },
+          currency: { type: Type.STRING },
+          unit: { type: Type.STRING },
+          formula: { type: Type.STRING, nullable: true },
+          source_page: { type: Type.INTEGER, nullable: true },
+          source_location: { type: Type.STRING },
+          evidence: { type: Type.STRING },
+          uncertain: { type: Type.BOOLEAN },
+          ambiguous_reason: { type: Type.STRING, nullable: true },
         },
+        required: ['metric', 'period', 'unit', 'source_location', 'evidence'],
       },
     },
-  });
+  };
+
+  const modelsToTry = [
+    { model: 'gemini-4-hydrogen', delayMs: 0 },
+    { model: 'gemini-4-hydrogen', delayMs: 1500 },
+    { model: 'gemini-3.1-flash-lite', delayMs: 1500 },
+  ];
+
+  let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null =
+    null;
+  let lastError: unknown = null;
+
+  for (const attempt of modelsToTry) {
+    if (attempt.delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, attempt.delayMs));
+    }
+    try {
+      response = await ai.models.generateContent({
+        model: attempt.model,
+        contents,
+        config:
+          attempt.model === 'gemini-4-hydrogen'
+            ? requestConfig
+            : {
+                systemInstruction: requestConfig.systemInstruction,
+                responseMimeType: requestConfig.responseMimeType,
+                responseSchema: requestConfig.responseSchema,
+              },
+      });
+      break;
+    } catch (err) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTransient =
+        msg.includes('503') ||
+        msg.includes('429') ||
+        msg.includes('UNAVAILABLE') ||
+        msg.includes('RESOURCE_EXHAUSTED') ||
+        msg.toLowerCase().includes('high demand') ||
+        msg.toLowerCase().includes('overloaded');
+      if (!isTransient) {
+        throw err;
+      }
+    }
+  }
+
+  if (!response) {
+    const rawMsg =
+      lastError instanceof Error ? lastError.message : String(lastError ?? '');
+    if (
+      rawMsg.includes('503') ||
+      rawMsg.includes('UNAVAILABLE') ||
+      rawMsg.toLowerCase().includes('high demand')
+    ) {
+      throw new Error(
+        'Dịch vụ AI trích xuất (Gemini) đang quá tải tạm thời (HTTP 503). Vui lòng thử tải lên lại sau vài giây.',
+      );
+    }
+    if (rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED')) {
+      throw new Error(
+        'Vượt giới hạn tần suất gọi Gemini API (HTTP 429). Vui lòng đợi một lát rồi thử lại.',
+      );
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Không thể kết nối dịch vụ Gemini AI để trích xuất tài liệu.');
+  }
 
   const rawJson = (response.text ?? '[]').trim();
   const parsed = JSON.parse(rawJson) as Array<{

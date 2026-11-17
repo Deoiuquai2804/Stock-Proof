@@ -427,6 +427,208 @@ async function startServer() {
     res.json({ tolerance_percent: val });
   });
 
+  interface UploadJobState {
+    job_id: string;
+    status: 'processing' | 'completed' | 'failed';
+    progress: number;
+    created_at: number;
+    report?: ReportRecord;
+    extractor?: string;
+    page_count?: number;
+    error?: string;
+  }
+
+  const uploadJobs = new Map<string, UploadJobState>();
+
+  function pruneOldUploadJobs() {
+    const cutoff = Date.now() - 30 * 60 * 1000;
+    for (const [k, v] of uploadJobs.entries()) {
+      if (v.created_at < cutoff) uploadJobs.delete(k);
+    }
+  }
+
+  async function runReportUploadPipeline(params: {
+    file: Express.Multer.File;
+    body: {
+      company_name?: string;
+      ticker?: string;
+      reporting_period?: string;
+      report_type?: ReportType;
+      fiscal_year?: string;
+      currency?: string;
+      unit?: string;
+    };
+    authUser: Awaited<ReturnType<typeof tryResolveUser>>;
+    onProgress?: (pct: number) => void;
+  }) {
+    const { file, body, authUser, onProgress } = params;
+    const companyName = body.company_name?.trim() || DEMO_COMPANY.name;
+    const ticker = (body.ticker?.trim() || 'FPT').toUpperCase();
+    const reportingPeriod = body.reporting_period?.trim() || 'FY2025';
+    const reportType: ReportType =
+      body.report_type === 'Separate' ? 'Separate' : 'Consolidated';
+    const fiscalYear = body.fiscal_year?.trim() || '2025';
+    const currency = body.currency?.trim() || 'VND';
+    const unit = body.unit?.trim() || 'Tỷ VND';
+
+    onProgress?.(35);
+    const processed = await processUploadedDocument({
+      buffer: file.buffer,
+      originalFilename: file.originalname,
+      mimeType: file.mimetype,
+    });
+
+    onProgress?.(55);
+    const extraction = await extractFinancialClaims({
+      extractedText: processed.extractedText,
+      structuredRows: processed.structuredJsonClaims,
+      companyName,
+      period: reportingPeriod,
+      reportType,
+      currency,
+      unit,
+      sourceDocument: processed.originalFilename,
+      pageCount: processed.pageCount,
+      isScannedPdf: processed.isScannedPdf,
+      pdfBase64: processed.pdfBase64,
+    });
+
+    onProgress?.(85);
+    const reportId = `RPT-${ticker}-${Date.now().toString(36).toUpperCase()}`;
+    const newReportBase: ReportRecord = {
+      id: reportId,
+      company_name: companyName,
+      ticker,
+      exchange: 'HOSE',
+      original_filename: processed.originalFilename,
+      file_size: processed.fileSize,
+      file_type: processed.fileType,
+      document_hash: processed.documentHash,
+      reporting_period: reportingPeriod,
+      report_type: reportType,
+      fiscal_year: fiscalYear,
+      currency,
+      unit,
+      storage_path: processed.storagePath,
+      status: 'EXTRACTED',
+      buyer_decision: 'Pending',
+      buyer_note: '',
+      is_demo_data: false,
+      created_at: new Date().toISOString(),
+      extracted_claims: extraction.claims,
+      verification_results: [],
+      evidence_report: null,
+      blockchain_record: null,
+      human_reviews: [],
+    };
+
+    const demo = await loadDemoDatabase();
+    const verifiedReport = await recomputeReport(
+      newReportBase,
+      demo.tolerance_percent,
+    );
+
+    if (authUser && authUser.email) {
+      const dbUser = await getOrCreateUser(
+        authUser.uid,
+        authUser.email,
+        authUser.name,
+      );
+      const comp = await ensureCompany(companyName, ticker, 'HOSE');
+      const [insertedReport] = await db
+        .insert(reportsTable)
+        .values({
+          reportCode: verifiedReport.id,
+          userId: dbUser.id,
+          companyId: comp.id,
+          originalFilename: verifiedReport.original_filename,
+          documentHash: verifiedReport.document_hash,
+          reportingPeriod: verifiedReport.reporting_period,
+          reportType: verifiedReport.report_type,
+          fiscalYear: verifiedReport.fiscal_year,
+          currency: verifiedReport.currency,
+          unit: verifiedReport.unit,
+          storagePath: verifiedReport.storage_path,
+          status: verifiedReport.status,
+          buyerDecision: 'Pending',
+          buyerNote: '',
+        })
+        .returning();
+
+      for (let i = 0; i < verifiedReport.extracted_claims.length; i++) {
+        const c = verifiedReport.extracted_claims[i];
+        const v = verifiedReport.verification_results[i];
+        const [insertedClaim] = await db
+          .insert(claimsTable)
+          .values({
+            reportId: insertedReport.id,
+            claimCode: c.claim_id,
+            claimType: c.claim_type,
+            metric: c.metric,
+            reportedValue: c.reported_value,
+            referenceValue: v.reference_value,
+            period: c.period,
+            reportType: c.report_type,
+            currency: c.currency,
+            unit: c.unit,
+            formula: c.formula,
+            sourcePage: c.source_page,
+            sourceLocation: c.source_location,
+            evidence: c.evidence,
+            verificationStatus: v.status,
+          })
+          .returning();
+
+        const evHash = await computeSha256Hex(
+          `${c.source_document}:${c.source_page ?? ''}:${c.evidence}`,
+        );
+        await db.insert(evidencesTable).values({
+          claimId: insertedClaim.id,
+          sourceName: c.source_document,
+          sourcePage: c.source_page,
+          sourceLocation: c.source_location,
+          evidenceHash: evHash,
+        });
+        await db.insert(verificationsTable).values({
+          reportId: insertedReport.id,
+          claimId: insertedClaim.id,
+          result: v.status,
+          explanation: v.explanation,
+          difference: v.difference_label,
+          validationRule: v.validation_rule,
+        });
+      }
+    } else {
+      demo.reports = [verifiedReport, ...demo.reports];
+      demo.active_report_id = verifiedReport.id;
+      demo.activities.unshift({
+        id: `ACT-${Date.now()}`,
+        report_id: verifiedReport.id,
+        title: `Đã tải lên & phân tích ${processed.originalFilename}`,
+        description: `Đã trích xuất ${extraction.claims.length} chỉ tiêu (${extraction.extractor}) và chạy xác minh.`,
+        status:
+          verifiedReport.status === 'VERIFIED' ? 'verified' : 'warning',
+        timestamp: new Date().toISOString(),
+      });
+      await saveDemoDatabase(demo);
+    }
+
+    return {
+      report: verifiedReport,
+      extractor: extraction.extractor,
+      page_count: processed.pageCount,
+    };
+  }
+
+  app.get('/api/reports/upload-jobs/:jobId', (req, res) => {
+    const job = uploadJobs.get(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Không tìm thấy tiến trình phân tích tài liệu.' });
+      return;
+    }
+    res.json(job);
+  });
+
   app.post('/api/reports/upload', upload.single('file'), async (req, res) => {
     try {
       const file = req.file;
@@ -444,159 +646,56 @@ async function startServer() {
         currency?: string;
         unit?: string;
       };
-
-      const companyName = body.company_name?.trim() || DEMO_COMPANY.name;
-      const ticker = (body.ticker?.trim() || 'FPT').toUpperCase();
-      const reportingPeriod = body.reporting_period?.trim() || 'FY2025';
-      const reportType: ReportType =
-        body.report_type === 'Separate' ? 'Separate' : 'Consolidated';
-      const fiscalYear = body.fiscal_year?.trim() || '2025';
-      const currency = body.currency?.trim() || 'VND';
-      const unit = body.unit?.trim() || 'Tỷ VND';
-
-      const processed = await processUploadedDocument({
-        buffer: file.buffer,
-        originalFilename: file.originalname,
-        mimeType: file.mimetype,
-      });
-
-      const extraction = await extractFinancialClaims({
-        extractedText: processed.extractedText,
-        structuredRows: processed.structuredJsonClaims,
-        companyName,
-        period: reportingPeriod,
-        reportType,
-        currency,
-        unit,
-        sourceDocument: processed.originalFilename,
-      });
-
-      const reportId = `RPT-${ticker}-${Date.now().toString(36).toUpperCase()}`;
-      const newReportBase: ReportRecord = {
-        id: reportId,
-        company_name: companyName,
-        ticker,
-        exchange: 'HOSE',
-        original_filename: processed.originalFilename,
-        file_size: processed.fileSize,
-        file_type: processed.fileType,
-        document_hash: processed.documentHash,
-        reporting_period: reportingPeriod,
-        report_type: reportType,
-        fiscal_year: fiscalYear,
-        currency,
-        unit,
-        storage_path: processed.storagePath,
-        status: 'EXTRACTED',
-        buyer_decision: 'Pending',
-        buyer_note: '',
-        is_demo_data: false,
-        created_at: new Date().toISOString(),
-        extracted_claims: extraction.claims,
-        verification_results: [],
-        evidence_report: null,
-        blockchain_record: null,
-        human_reviews: [],
-      };
-
-      const demo = await loadDemoDatabase();
-      const verifiedReport = await recomputeReport(
-        newReportBase,
-        demo.tolerance_percent,
-      );
-
-      // Persist to Cloud SQL if authenticated
       const authUser = await tryResolveUser(req);
-      if (authUser && authUser.email) {
-        const dbUser = await getOrCreateUser(
-          authUser.uid,
-          authUser.email,
-          authUser.name,
-        );
-        const comp = await ensureCompany(companyName, ticker, 'HOSE');
-        const [insertedReport] = await db
-          .insert(reportsTable)
-          .values({
-            reportCode: verifiedReport.id,
-            userId: dbUser.id,
-            companyId: comp.id,
-            originalFilename: verifiedReport.original_filename,
-            documentHash: verifiedReport.document_hash,
-            reportingPeriod: verifiedReport.reporting_period,
-            reportType: verifiedReport.report_type,
-            fiscalYear: verifiedReport.fiscal_year,
-            currency: verifiedReport.currency,
-            unit: verifiedReport.unit,
-            storagePath: verifiedReport.storage_path,
-            status: verifiedReport.status,
-            buyerDecision: 'Pending',
-            buyerNote: '',
+
+      if (String(req.query.async || '') === 'true') {
+        pruneOldUploadJobs();
+        const jobId = `JOB-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex')}`;
+        const job: UploadJobState = {
+          job_id: jobId,
+          status: 'processing',
+          progress: 25,
+          created_at: Date.now(),
+        };
+        uploadJobs.set(jobId, job);
+
+        void runReportUploadPipeline({
+          file,
+          body,
+          authUser,
+          onProgress: (pct) => {
+            job.progress = pct;
+          },
+        })
+          .then((result) => {
+            job.status = 'completed';
+            job.progress = 100;
+            job.report = result.report;
+            job.extractor = result.extractor;
+            job.page_count = result.page_count;
           })
-          .returning();
-
-        for (let i = 0; i < verifiedReport.extracted_claims.length; i++) {
-          const c = verifiedReport.extracted_claims[i];
-          const v = verifiedReport.verification_results[i];
-          const [insertedClaim] = await db
-            .insert(claimsTable)
-            .values({
-              reportId: insertedReport.id,
-              claimCode: c.claim_id,
-              claimType: c.claim_type,
-              metric: c.metric,
-              reportedValue: c.reported_value,
-              referenceValue: v.reference_value,
-              period: c.period,
-              reportType: c.report_type,
-              currency: c.currency,
-              unit: c.unit,
-              formula: c.formula,
-              sourcePage: c.source_page,
-              sourceLocation: c.source_location,
-              evidence: c.evidence,
-              verificationStatus: v.status,
-            })
-            .returning();
-
-          const evHash = await computeSha256Hex(
-            `${c.source_document}:${c.source_page ?? ''}:${c.evidence}`,
-          );
-          await db.insert(evidencesTable).values({
-            claimId: insertedClaim.id,
-            sourceName: c.source_document,
-            sourcePage: c.source_page,
-            sourceLocation: c.source_location,
-            evidenceHash: evHash,
+          .catch((err) => {
+            job.status = 'failed';
+            job.error =
+              err instanceof Error
+                ? err.message
+                : 'Trích xuất tài liệu thất bại.';
           });
-          await db.insert(verificationsTable).values({
-            reportId: insertedReport.id,
-            claimId: insertedClaim.id,
-            result: v.status,
-            explanation: v.explanation,
-            difference: v.difference_label,
-            validationRule: v.validation_rule,
-          });
-        }
-      } else {
-        demo.reports = [verifiedReport, ...demo.reports];
-        demo.active_report_id = verifiedReport.id;
-        demo.activities.unshift({
-          id: `ACT-${Date.now()}`,
-          report_id: verifiedReport.id,
-          title: `Đã tải lên & phân tích ${processed.originalFilename}`,
-          description: `Đã trích xuất ${extraction.claims.length} chỉ tiêu (${extraction.extractor}) và chạy xác minh.`,
-          status:
-            verifiedReport.status === 'VERIFIED' ? 'verified' : 'warning',
-          timestamp: new Date().toISOString(),
+
+        res.status(202).json({
+          job_id: jobId,
+          status: 'processing',
+          progress: 25,
         });
-        await saveDemoDatabase(demo);
+        return;
       }
 
-      res.json({
-        report: verifiedReport,
-        extractor: extraction.extractor,
-        page_count: processed.pageCount,
+      const result = await runReportUploadPipeline({
+        file,
+        body,
+        authUser,
       });
+      res.json(result);
     } catch (err) {
       res.status(400).json({
         error:
@@ -1059,6 +1158,36 @@ async function startServer() {
     await saveDemoDatabase(initial);
     res.json({ ok: true });
   });
+
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({ error: 'Không tìm thấy endpoint API.' });
+  });
+
+  app.use(
+    (
+      err: unknown,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          res.status(413).json({
+            error: 'Tệp tải lên vượt quá giới hạn tối đa 15 MB.',
+          });
+          return;
+        }
+        res.status(400).json({
+          error: `Lỗi tải tệp lên: ${err.message}`,
+        });
+        return;
+      }
+      res.status(500).json({
+        error:
+          err instanceof Error ? err.message : 'Lỗi nội bộ máy chủ API.',
+      });
+    },
+  );
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

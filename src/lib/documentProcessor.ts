@@ -11,6 +11,8 @@ export interface ProcessedDocument {
   storagePath: string;
   extractedText: string;
   pageCount: number;
+  isScannedPdf?: boolean;
+  pdfBase64?: string;
   structuredJsonClaims?: Record<string, unknown>[];
 }
 
@@ -121,22 +123,23 @@ export async function processUploadedDocument(params: {
   });
   const pdfDoc = await loadingTask.promise;
   const pageTexts: string[] = [];
+  let rawTextChars = 0;
 
   for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
     const page = await pdfDoc.getPage(pageNum);
     const content = await page.getTextContent();
     const strings = content.items
-      .map((item) => ('str' in item ? item.str : ''))
+      .map((item) => ('str' in item ? item.str.trim() : ''))
       .filter(Boolean);
-    pageTexts.push(`[Trang ${pageNum}]\n${strings.join(' ')}`);
+    const pageBody = strings.join(' ');
+    rawTextChars += pageBody.length;
+    if (pageBody.length > 0) {
+      pageTexts.push(`[Trang ${pageNum}]\n${pageBody}`);
+    }
   }
 
   const combinedText = pageTexts.join('\n\n').trim();
-  if (!combinedText) {
-    throw new Error(
-      'Tệp PDF không có lớp văn bản trích xuất được. Tệp PDF dạng ảnh scan cần xử lý OCR trước.',
-    );
-  }
+  const isScannedPdf = rawTextChars < 50;
 
   return {
     originalFilename: params.originalFilename,
@@ -144,7 +147,9 @@ export async function processUploadedDocument(params: {
     fileSize: params.buffer.length,
     documentHash,
     storagePath,
-    extractedText: combinedText.slice(0, 60000),
+    extractedText: isScannedPdf ? '' : combinedText.slice(0, 60000),
     pageCount: pdfDoc.numPages,
+    isScannedPdf,
+    pdfBase64: isScannedPdf ? params.buffer.toString('base64') : undefined,
   };
 }

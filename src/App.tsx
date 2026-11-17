@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Sidebar, type AppRoute } from './components/Sidebar';
 import { TopNav } from './components/TopNav';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { parseApiJson } from './lib/apiClient';
 import { BlockchainPage } from './pages/BlockchainPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { EvidencePage } from './pages/EvidencePage';
@@ -66,11 +67,10 @@ function StockProofAppShell() {
     try {
       const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/workspace', { headers: authHeaders });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to load StockProof workspace.');
-      }
-      const payload = data as WorkspacePayload;
+      const payload = await parseApiJson<WorkspacePayload>(
+        res,
+        'Không thể tải không gian làm việc StockProof.',
+      );
       setWorkspace(payload);
       setActiveReportId((prev) =>
         prev && payload.reports.some((r) => r.id === prev)
@@ -79,7 +79,7 @@ function StockProofAppShell() {
       );
     } catch (err) {
       setWorkspaceError(
-        err instanceof Error ? err.message : 'Unable to reach StockProof API.',
+        err instanceof Error ? err.message : 'Không thể kết nối tới API StockProof.',
       );
     } finally {
       setLoadingWorkspace(false);
@@ -136,14 +136,13 @@ function StockProofAppShell() {
       },
       body: JSON.stringify({ tolerance_percent: newTolerance }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to update tolerance.');
+    await parseApiJson(res, 'Không thể cập nhật ngưỡng sai số.');
     await fetchWorkspace();
   };
 
   const handleResetDemo = async () => {
     const res = await fetch('/api/reset', { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to reset demo scenario.');
+    await parseApiJson(res, 'Không thể khôi phục kịch bản mẫu.');
     await fetchWorkspace();
   };
 

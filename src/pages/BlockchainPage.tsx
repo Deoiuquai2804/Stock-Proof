@@ -9,6 +9,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { parseApiJson } from '../lib/apiClient';
 import type {
   BlockchainNetworkStatus,
   BlockchainRecord,
@@ -62,7 +63,7 @@ export function BlockchainPage({
   useEffect(() => {
     if (showContract && !contractSource) {
       fetch('/api/contract-source')
-        .then((r) => r.json())
+        .then((r) => parseApiJson<{ source?: string }>(r, 'Không thể tải hợp đồng.'))
         .then((d) => setContractSource(d.source || ''))
         .catch(() => setContractSource('// Không thể tải mã nguồn hợp đồng.'));
     }
@@ -159,8 +160,10 @@ export function BlockchainPage({
           mode: 'LIVE_FUJI_WALLET',
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lưu bản ghi thất bại.');
+      const data = await parseApiJson<{
+        report?: ReportRecord;
+        blockchain_record?: BlockchainRecord;
+      }>(res, 'Lưu bản ghi thất bại.');
 
       if (data.report && data.blockchain_record) {
         onRecordCreated(data.report, data.blockchain_record);
@@ -196,8 +199,10 @@ export function BlockchainPage({
           mode: 'DEMO_SIMULATION',
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ghi bản mô phỏng thất bại.');
+      const data = await parseApiJson<{
+        report?: ReportRecord;
+        blockchain_record?: BlockchainRecord;
+      }>(res, 'Ghi bản mô phỏng thất bại.');
 
       if (data.report && data.blockchain_record) {
         onRecordCreated(data.report, data.blockchain_record);

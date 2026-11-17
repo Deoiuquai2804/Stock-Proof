@@ -151,3 +151,52 @@ test('processUploadedDocument + extractFinancialClaims deterministically parses 
   assert.equal(growthRes.status, 'MISMATCH');
 });
 
+test('processUploadedDocument detects scanned image PDFs accurately without faking text', async () => {
+  const fs = await import('node:fs/promises');
+  const { processUploadedDocument } = await import('./documentProcessor.ts');
+  const pdfPath = 'public/assets/aistudio/VNM_2024_ENG_c372c76a.pdf';
+  const buf = await fs.readFile(pdfPath);
+  const processed = await processUploadedDocument({
+    buffer: buf,
+    originalFilename: 'VNM_2024_ENG_c372c76a.pdf',
+    mimeType: 'application/pdf',
+  });
+
+  assert.equal(processed.pageCount, 54);
+  assert.equal(processed.isScannedPdf, true);
+  assert.equal(processed.extractedText, '');
+  assert.ok(processed.pdfBase64 && processed.pdfBase64.length > 1000);
+});
+
+test('parseApiJson surfaces friendly errors for HTML proxy responses instead of JSON syntax errors', async () => {
+  const { parseApiJson } = await import('./apiClient.ts');
+
+  const html504 = new Response('<!doctype html><html><body>504 Gateway Timeout</body></html>', {
+    status: 504,
+    headers: { 'Content-Type': 'text/html' },
+  });
+  await assert.rejects(
+    () => parseApiJson(html504, 'Tải lên thất bại'),
+    /HTTP 504/,
+  );
+
+  const html413 = new Response('<!DOCTYPE html><html>Payload Too Large</html>', {
+    status: 413,
+    headers: { 'Content-Type': 'text/html' },
+  });
+  await assert.rejects(
+    () => parseApiJson(html413, 'Tải lên thất bại'),
+    /HTTP 413/,
+  );
+
+  const okJson = new Response(JSON.stringify({ ok: true, job_id: 'job-1' }), {
+    status: 202,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const parsed = await parseApiJson<{ ok: boolean; job_id: string }>(okJson, 'Lỗi');
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.job_id, 'job-1');
+});
+
+
+

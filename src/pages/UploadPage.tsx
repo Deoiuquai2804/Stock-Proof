@@ -10,6 +10,7 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { parseApiJson } from '../lib/apiClient';
 import type { AppRoute } from '../components/Sidebar';
 import type {
   FinancialClaimInput,
@@ -118,23 +119,65 @@ export function UploadPage({
       const authHeaders = await getAuthHeaders();
       setUploadProgress(60);
 
-      const res = await fetch('/api/reports/upload', {
+      const res = await fetch('/api/reports/upload?async=true', {
         method: 'POST',
         headers: authHeaders,
         body: formData,
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Phân tích tài liệu thất bại.');
+      const initialData = await parseApiJson<{
+        job_id?: string;
+        status?: 'processing' | 'completed' | 'failed';
+        progress?: number;
+        report?: ReportRecord;
+        extractor?: string;
+        page_count?: number;
+        error?: string;
+      }>(res, 'Phân tích tài liệu thất bại.');
+
+      let finalResult = initialData;
+      if (initialData.job_id && initialData.status === 'processing') {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 180_000) {
+          await new Promise((r) => setTimeout(r, 1200));
+          const jobRes = await fetch(
+            `/api/reports/upload-jobs/${initialData.job_id}`,
+            { headers: authHeaders },
+          );
+          const jobData = await parseApiJson<{
+            status: 'processing' | 'completed' | 'failed';
+            progress?: number;
+            report?: ReportRecord;
+            extractor?: string;
+            page_count?: number;
+            error?: string;
+          }>(jobRes, 'Không thể kiểm tra tiến độ phân tích tài liệu.');
+
+          if (typeof jobData.progress === 'number') {
+            setUploadProgress(Math.max(35, Math.min(95, jobData.progress)));
+          }
+          if (jobData.status === 'completed') {
+            finalResult = jobData;
+            break;
+          }
+          if (jobData.status === 'failed') {
+            throw new Error(jobData.error || 'Phân tích tài liệu thất bại.');
+          }
+        }
+      }
+
+      if (!finalResult.report) {
+        throw new Error(
+          'Quá thời gian chờ phân tích tài liệu. Vui lòng thử lại.',
+        );
       }
 
       setUploadProgress(100);
-      const uploadedReport = data.report as ReportRecord;
+      const uploadedReport = finalResult.report;
       setAnalyzedReport(uploadedReport);
       setEditableClaims(uploadedReport.extracted_claims.map((c) => ({ ...c })));
-      setExtractorUsed(data.extractor || 'STRUCTURED_PARSER');
-      setPageCount(data.page_count ?? 1);
+      setExtractorUsed(finalResult.extractor || 'STRUCTURED_PARSER');
+      setPageCount(finalResult.page_count ?? 1);
       onReportUploaded(uploadedReport);
     } catch (err) {
       setErrorMsg(
@@ -192,10 +235,10 @@ export function UploadPage({
         body: JSON.stringify({ claims: editableClaims }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Lưu và xác minh lại thất bại.');
-      }
+      const data = await parseApiJson<{ report?: ReportRecord }>(
+        res,
+        'Lưu và xác minh lại thất bại.',
+      );
       if (data.report) {
         setAnalyzedReport(data.report);
         onClaimsSaved(data.report);
