@@ -1,6 +1,6 @@
 {
   "name": "StockProof",
-  "description": "Claim-level Financial Verification Engine & Avalanche Fuji Audit Registry for Vietnamese Listed Enterprises",
+  "description": "Nền tảng xác minh báo cáo tài chính ứng dụng Blockchain và AI cho doanh nghiệp niêm yết Việt Nam",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

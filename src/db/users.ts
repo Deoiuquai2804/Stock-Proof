@@ -7,7 +7,7 @@ export async function getOrCreateUser(
   name?: string,
 ) {
   try {
-    const displayName = name?.trim() || email.split('@')[0] || 'Auditor';
+    const displayName = name?.trim() || email.split('@')[0] || 'Kiểm toán viên';
     const result = await db
       .insert(users)
       .values({
@@ -28,6 +28,6 @@ export async function getOrCreateUser(
     return result[0];
   } catch (error) {
     console.error('Database query failed in getOrCreateUser:', error);
-    throw new Error('Failed to synchronize user account.', { cause: error });
+    throw new Error('Không thể đồng bộ tài khoản người dùng.', { cause: error });
   }
 }

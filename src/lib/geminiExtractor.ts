@@ -2,16 +2,16 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { FinancialClaimInput, ReportType } from '../types/stockproof.ts';
 
 const TARGET_METRICS = [
-  'Revenue',
-  'Cost of Goods Sold',
-  'Gross Profit',
-  'Operating Profit',
-  'Net Profit After Tax',
-  'Total Assets',
-  'Total Liabilities',
-  'Total Equity',
-  'Operating Cash Flow',
-  'Revenue Growth',
+  'Doanh thu thuần',
+  'Giá vốn hàng bán',
+  'Lợi nhuận gộp',
+  'Lợi nhuận thuần từ HĐKD',
+  'Lợi nhuận sau thuế',
+  'Tổng tài sản',
+  'Nợ phải trả',
+  'Vốn chủ sở hữu',
+  'Lưu chuyển tiền tệ từ HĐKD',
+  'Tăng trưởng doanh thu',
 ] as const;
 
 export interface ExtractionContext {
@@ -75,11 +75,32 @@ function tryStructuredClaimMapping(
     );
     const periodVal = String(getVal('period', 'kỳ') ?? ctx.period);
     const unitVal = String(getVal('unit', 'đơn vị') ?? ctx.unit);
-    const pageVal = getVal('source_page', 'page', '__page');
+    const pageVal = getVal('source_page', 'page');
     const sourcePage =
-      pageVal !== undefined && pageVal !== null && !Number.isNaN(Number(pageVal))
+      pageVal !== undefined &&
+      pageVal !== null &&
+      String(pageVal).trim() !== '' &&
+      !Number.isNaN(Number(pageVal))
         ? Number(pageVal)
         : null;
+    const rawSourceDoc = getVal('source_document');
+    const hasSourceDocCol = keys.includes('source_document');
+    const sourceDocument =
+      rawSourceDoc !== undefined && rawSourceDoc !== null
+        ? String(rawSourceDoc).trim()
+        : hasSourceDocCol
+          ? ''
+          : ctx.sourceDocument;
+    const rawSourceLoc = getVal('source_location');
+    const sourceLocation =
+      rawSourceLoc !== undefined && rawSourceLoc !== null
+        ? String(rawSourceLoc).trim()
+        : '';
+    const rawEvidence = getVal('evidence');
+    const evidence =
+      rawEvidence !== undefined && rawEvidence !== null
+        ? String(rawEvidence).trim()
+        : '';
 
     mapped.push({
       claim_id: claimId,
@@ -89,6 +110,8 @@ function tryStructuredClaimMapping(
           : String(getVal('claim_type') ?? '') === 'subjective_claim'
             ? 'subjective_claim'
             : metricRaw.toLowerCase().includes('growth') ||
+                metricRaw.toLowerCase().includes('tăng trưởng') ||
+                metricRaw.toLowerCase().includes('biên') ||
                 metricRaw.toLowerCase().includes('margin')
               ? 'financial_ratio'
               : 'financial_metric',
@@ -103,17 +126,10 @@ function tryStructuredClaimMapping(
       currency: String(getVal('currency') ?? ctx.currency),
       unit: unitVal,
       formula: getVal('formula') ? String(getVal('formula')) : null,
-      source_document: String(
-        getVal('source_document') ?? ctx.sourceDocument,
-      ),
+      source_document: sourceDocument,
       source_page: sourcePage,
-      source_location: String(
-        getVal('source_location', '__sheet') ?? 'Financial Statement Table',
-      ),
-      evidence: String(
-        getVal('evidence') ??
-          `${metricRaw}: ${numericVal ?? 'N/A'} ${unitVal} (${periodVal})`,
-      ),
+      source_location: sourceLocation,
+      evidence,
       verification_status: 'PENDING',
       uncertain: numericVal === null || !Number.isFinite(numericVal),
     });
@@ -125,17 +141,17 @@ function tryStructuredClaimMapping(
 export async function extractFinancialClaims(
   ctx: ExtractionContext,
 ): Promise<ExtractionResult> {
-  // 1. If the uploaded JSON/XLSX/CSV already uses structured claim columns, parse deterministically
+  // 1. Nếu tệp JSON/XLSX/CSV đã có cột chuẩn, phân tích xác định trực tiếp
   const directMapped = tryStructuredClaimMapping(ctx);
   if (directMapped) {
     return { claims: directMapped, extractor: 'STRUCTURED_PARSER' };
   }
 
-  // 2. Otherwise use Gemini API (server-side) for structured extraction
+  // 2. Ngược lại dùng Gemini API (phía máy chủ) để trích xuất chỉ tiêu có cấu trúc
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      'GEMINI_API_KEY is not configured in environment secrets. Upload a structured JSON/CSV claim template or configure GEMINI_API_KEY to extract unstructured PDFs.',
+      'Chưa cấu hình GEMINI_API_KEY trong biến môi trường máy chủ. Hãy tải lên tệp CSV/JSON có cấu trúc hoặc cấu hình GEMINI_API_KEY để trích xuất PDF tự động.',
     );
   }
 
@@ -148,25 +164,25 @@ export async function extractFinancialClaims(
     },
   });
 
-  const prompt = `Extract structured financial claims from the following financial document text.
-Company: ${ctx.companyName}
-Expected Reporting Period: ${ctx.period}
-Expected Report Type: ${ctx.reportType}
-Default Currency: ${ctx.currency}
-Default Unit: ${ctx.unit}
-Source Filename: ${ctx.sourceDocument}
+  const prompt = `Trích xuất các chỉ tiêu tài chính có cấu trúc từ nội dung báo cáo sau bằng tiếng Việt.
+Doanh nghiệp: ${ctx.companyName}
+Kỳ báo cáo dự kiến: ${ctx.period}
+Loại báo cáo dự kiến: ${ctx.reportType}
+Tiền tệ mặc định: ${ctx.currency}
+Đơn vị mặc định: ${ctx.unit}
+Tên tệp nguồn: ${ctx.sourceDocument}
 
-Prioritize extracting these 10 financial metrics where explicitly present in the document:
+Ưu tiên trích xuất 10 chỉ tiêu sau nếu xuất hiện rõ ràng trong văn bản:
 ${TARGET_METRICS.map((m, i) => `${i + 1}. ${m}`).join('\n')}
 
-Rules:
-- Extract ONLY values and citations that explicitly appear in the text.
-- NEVER fabricate, guess, or interpolate missing numbers. If a metric is missing or ambiguous, either omit it or set uncertain=true and reported_value=null.
-- Map each claim to its exact [Page N] marker if present, table/section name in source_location, and a brief verbatim evidence excerpt.
-- Identify exact units (VND, Million VND, Billion VND, %) and reporting period shown in the text (even if it differs from the expected metadata).
-- Distinguish factual metrics ("financial_metric"), ratios ("financial_ratio"), and subjective/uncertain commentary ("subjective_claim").
+Quy tắc bắt buộc:
+- Chỉ trích xuất số liệu và trích dẫn thực sự có trong văn bản.
+- TUYỆT ĐỐI KHÔNG tự bịa, đoán hoặc nội suy số liệu thiếu. Nếu thiếu hoặc mơ hồ, đặt uncertain=true và reported_value=null.
+- Gắn đúng số [Trang N], tên bảng/mục trong source_location và đoạn trích dẫn nguyên văn vào evidence.
+- Nhận diện chính xác đơn vị (VND, Triệu VND, Tỷ VND, %) và kỳ báo cáo thể hiện trong văn bản.
+- Phân loại rõ "financial_metric" (chỉ tiêu số liệu), "financial_ratio" (tỷ lệ/tăng trưởng), và "subjective_claim" (nhận định chủ quan/mơ hồ).
 
-Document text:
+Nội dung tài liệu:
 ${ctx.extractedText.slice(0, 40000)}`;
 
   const response = await ai.models.generateContent({
@@ -174,7 +190,7 @@ ${ctx.extractedText.slice(0, 40000)}`;
     contents: prompt,
     config: {
       systemInstruction:
-        'You are a strict financial data extraction engine. Extract structured financial claims in JSON format without inventing or modifying numbers.',
+        'Bạn là bộ máy trích xuất dữ liệu tài chính nghiêm ngặt. Trích xuất chỉ tiêu tài chính sang JSON mà không tự sửa đổi hay bịa số liệu.',
       responseMimeType: 'application/json',
       responseSchema: {
         type: Type.ARRAY,
@@ -220,7 +236,7 @@ ${ctx.extractedText.slice(0, 40000)}`;
 
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error(
-      'Gemini extraction returned zero structured financial claims from this document.',
+      'Gemini không trích xuất được chỉ tiêu tài chính có cấu trúc nào từ tài liệu này.',
     );
   }
 
@@ -247,7 +263,7 @@ ${ctx.extractedText.slice(0, 40000)}`;
     source_document: ctx.sourceDocument,
     source_page:
       typeof item.source_page === 'number' ? item.source_page : null,
-    source_location: item.source_location || 'Financial Statement',
+    source_location: item.source_location || 'Báo cáo tài chính',
     evidence: item.evidence || '',
     verification_status: 'PENDING',
     uncertain: Boolean(item.uncertain) || item.reported_value === null,

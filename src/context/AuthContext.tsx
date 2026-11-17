@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } catch (err) {
       setAuthError(
-        err instanceof Error ? err.message : 'Google sign-in failed.',
+        err instanceof Error ? err.message : 'Đăng nhập Google thất bại.',
       );
     } finally {
       setSigningIn(false);

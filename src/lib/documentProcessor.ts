@@ -25,12 +25,12 @@ export async function processUploadedDocument(params: {
   const allowedExts = ['.pdf', '.xlsx', '.xls', '.csv', '.json'];
   if (!allowedExts.includes(ext)) {
     throw new Error(
-      `Unsupported file format "${ext || 'unknown'}". Supported formats: PDF, XLSX, XLS, CSV, JSON.`,
+      `Định dạng tệp "${ext || 'không xác định'}" chưa được hỗ trợ. Các định dạng hợp lệ: PDF, XLSX, XLS, CSV, JSON.`,
     );
   }
 
   if (params.buffer.length === 0) {
-    throw new Error('Uploaded file is empty.');
+    throw new Error('Tệp tải lên đang bị rỗng.');
   }
 
   const documentHash =
@@ -47,7 +47,7 @@ export async function processUploadedDocument(params: {
     try {
       parsed = JSON.parse(raw);
     } catch {
-      throw new Error('Invalid JSON file syntax.');
+      throw new Error('Cú pháp tệp JSON không hợp lệ.');
     }
 
     const claimsArray = Array.isArray(parsed)
@@ -55,7 +55,7 @@ export async function processUploadedDocument(params: {
       : typeof parsed === 'object' &&
           parsed !== null &&
           Array.isArray((parsed as { claims?: unknown[] }).claims)
-        ? ((parsed as { claims: Record<string, unknown>[] }).claims)
+        ? (parsed as { claims: Record<string, unknown>[] }).claims
         : undefined;
 
     return {
@@ -71,9 +71,14 @@ export async function processUploadedDocument(params: {
   }
 
   if (ext === '.xlsx' || ext === '.xls' || ext === '.csv') {
-    const workbook = XLSX.read(params.buffer, { type: 'buffer' });
+    const workbook =
+      ext === '.csv'
+        ? XLSX.read(params.buffer.toString('utf-8').replace(/^\uFEFF/, ''), {
+            type: 'string',
+          })
+        : XLSX.read(params.buffer, { type: 'buffer', codepage: 65001 });
     if (workbook.SheetNames.length === 0) {
-      throw new Error('Spreadsheet contains no worksheets.');
+      throw new Error('Tệp bảng tính không có trang dữ liệu nào.');
     }
     const sheetTexts: string[] = [];
     const tableRows: Record<string, unknown>[] = [];
@@ -81,19 +86,23 @@ export async function processUploadedDocument(params: {
     workbook.SheetNames.forEach((sheetName, idx) => {
       const sheet = workbook.Sheets[sheetName];
       const csv = XLSX.utils.sheet_to_csv(sheet);
-      sheetTexts.push(`[Page ${idx + 1} | Sheet: ${sheetName}]\n${csv}`);
+      sheetTexts.push(`[Trang ${idx + 1} | Sheet: ${sheetName}]\n${csv}`);
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
-      rows.forEach((r) => tableRows.push({ ...r, __sheet: sheetName, __page: idx + 1 }));
+      rows.forEach((r) =>
+        tableRows.push({ ...r, __sheet: sheetName, __page: idx + 1 }),
+      );
     });
 
     const combined = sheetTexts.join('\n\n');
     if (!combined.trim()) {
-      throw new Error('Spreadsheet extraction yielded no readable cells.');
+      throw new Error('Không đọc được dữ liệu ô nào từ bảng tính.');
     }
 
     return {
       originalFilename: params.originalFilename,
-      fileType: params.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      fileType:
+        params.mimeType ||
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       fileSize: params.buffer.length,
       documentHash,
       storagePath,
@@ -103,7 +112,7 @@ export async function processUploadedDocument(params: {
     };
   }
 
-  // PDF extraction using pdfjs-dist legacy build for Node.js ESM
+  // Trích xuất PDF bằng pdfjs-dist cho Node.js ESM
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(params.buffer),
@@ -119,13 +128,13 @@ export async function processUploadedDocument(params: {
     const strings = content.items
       .map((item) => ('str' in item ? item.str : ''))
       .filter(Boolean);
-    pageTexts.push(`[Page ${pageNum}]\n${strings.join(' ')}`);
+    pageTexts.push(`[Trang ${pageNum}]\n${strings.join(' ')}`);
   }
 
   const combinedText = pageTexts.join('\n\n').trim();
   if (!combinedText) {
     throw new Error(
-      'PDF text extraction yielded empty text. Scanned/image-only PDFs require OCR preprocessing.',
+      'Tệp PDF không có lớp văn bản trích xuất được. Tệp PDF dạng ảnh scan cần xử lý OCR trước.',
     );
   }
 

@@ -153,7 +153,7 @@ export function VerificationPage({
         onReportUpdated(data.report as ReportRecord);
       }
       setReviewSuccess(
-        `Đã ghi nhận quyết định duyệt thủ công (${decision}) — đánh dấu HUMAN_APPROVED trong nhật ký kiểm toán.`,
+        `Đã ghi nhận quyết định duyệt thủ công (${decision}) — đánh dấu kiểm toán viên phê duyệt trong nhật ký.`,
       );
     } catch (err) {
       setReviewError(
@@ -612,7 +612,7 @@ export function VerificationPage({
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#22C55E]/15 hover:bg-[#22C55E]/25 border border-[#22C55E]/40 text-xs font-medium text-[#22C55E] whitespace-nowrap shrink-0"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>Chấp nhận (VERIFIED)</span>
+                <span>Chấp nhận (Đã xác minh)</span>
               </button>
 
               <button
@@ -622,7 +622,7 @@ export function VerificationPage({
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#EF4444]/15 hover:bg-[#EF4444]/25 border border-[#EF4444]/40 text-xs font-medium text-[#EF4444] whitespace-nowrap shrink-0"
               >
                 <XCircle className="h-3.5 w-3.5" />
-                <span>Từ chối (MISMATCH)</span>
+                <span>Từ chối (Sai lệch)</span>
               </button>
 
               <button

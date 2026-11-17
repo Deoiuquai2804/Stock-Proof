@@ -118,8 +118,8 @@ test('processUploadedDocument + extractFinancialClaims deterministically parses 
 
   const csv = [
     'claim_id,metric,reported_value,unit,period,source_page,evidence',
-    'CLM-CSV-1,Revenue,62849,Billion VND,FY2025,7,"Net revenue 62,849 Billion VND"',
-    'CLM-CSV-2,Revenue Growth,18.5,%,FY2025,2,"Executive summary 18.5%"',
+    'CLM-CSV-1,Doanh thu thuần,62849,Tỷ VND,FY2025,7,"Doanh thu thuần 62.849 tỷ VND"',
+    'CLM-CSV-2,Tăng trưởng doanh thu,18.5,%,FY2025,2,"Tóm tắt điều hành 18,5%"',
   ].join('\n');
 
   const processed = await processUploadedDocument({
@@ -134,11 +134,11 @@ test('processUploadedDocument + extractFinancialClaims deterministically parses 
   const extracted = await extractFinancialClaims({
     extractedText: processed.extractedText,
     structuredRows: processed.structuredJsonClaims,
-    companyName: 'FPT Corporation (DEMO DATA)',
+    companyName: 'Công ty Cổ phần FPT (DỮ LIỆU MẪU)',
     period: 'FY2025',
     reportType: 'Consolidated',
     currency: 'VND',
-    unit: 'Billion VND',
+    unit: 'Tỷ VND',
     sourceDocument: processed.originalFilename,
   });
 

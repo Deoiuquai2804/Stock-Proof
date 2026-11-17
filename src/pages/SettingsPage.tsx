@@ -152,8 +152,8 @@ export function SettingsPage({
               Bộ dữ liệu tham chiếu chuẩn (DỮ LIỆU MẪU)
             </h2>
             <p className="text-xs text-[#94A3B8]">
-              Số liệu đối chiếu gốc của FPT Corporation (HOSE: FPT · FY2025
-              Consolidated) được bộ máy xác minh sử dụng.
+              Số liệu đối chiếu gốc của Công ty Cổ phần FPT (HOSE: FPT · FY2025
+              Hợp nhất) được bộ máy xác minh sử dụng.
             </p>
           </div>
           <span className="text-xs font-medium text-[#F59E0B] whitespace-nowrap">

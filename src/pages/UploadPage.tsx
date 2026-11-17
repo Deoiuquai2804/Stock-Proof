@@ -34,13 +34,15 @@ export function UploadPage({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
-  const [companyName, setCompanyName] = useState('FPT Corporation (DEMO DATA)');
+  const [companyName, setCompanyName] = useState(
+    'Công ty Cổ phần FPT (DỮ LIỆU MẪU)',
+  );
   const [ticker, setTicker] = useState('FPT');
   const [reportingPeriod, setReportingPeriod] = useState('FY2025');
   const [reportType, setReportType] = useState<ReportType>('Consolidated');
   const [fiscalYear, setFiscalYear] = useState('2025');
   const [currency, setCurrency] = useState('VND');
-  const [unit, setUnit] = useState('Billion VND');
+  const [unit, setUnit] = useState('Tỷ VND');
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -433,8 +435,8 @@ export function UploadPage({
                   onChange={(e) => setUnit(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] focus:outline-none focus:border-[#3B82F6]"
                 >
-                  <option value="Billion VND">Tỷ VND (Billion VND)</option>
-                  <option value="Million VND">Triệu VND (Million VND)</option>
+                  <option value="Tỷ VND">Tỷ VND</option>
+                  <option value="Triệu VND">Triệu VND</option>
                   <option value="VND">VND</option>
                 </select>
               </label>

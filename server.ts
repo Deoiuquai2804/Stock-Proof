@@ -96,12 +96,12 @@ async function fetchFujiNetworkStatus(): Promise<BlockchainNetworkStatus> {
           contract_address: CONTRACT_ADDRESS_FUJI,
           block_number: Number.parseInt(json.result, 16),
           explorer_base_url: 'https://testnet.snowtrace.io',
-          mode_label: 'RPC Connected (Sign with Wallet for Live Tx or Use Demo Mode)',
+          mode_label: 'Đã kết nối RPC (Ký bằng ví để ghi trực tiếp hoặc dùng Chế độ Demo)',
         };
       }
     }
   } catch {
-    // RPC unreachable in offline sandbox
+    // RPC không khả dụng trong môi trường ngoại tuyến
   }
 
   return {
@@ -112,7 +112,7 @@ async function fetchFujiNetworkStatus(): Promise<BlockchainNetworkStatus> {
     contract_address: CONTRACT_ADDRESS_FUJI,
     block_number: null,
     explorer_base_url: 'https://testnet.snowtrace.io',
-    mode_label: 'Not Connected (Demo Mode Available)',
+    mode_label: 'Chưa kết nối (Có sẵn chế độ Demo)',
   };
 }
 
@@ -237,14 +237,14 @@ async function startServer() {
   app.post('/api/auth/session', requireAuth, async (req: AuthRequest, res) => {
     try {
       if (!req.user?.uid) {
-        res.status(401).json({ error: 'Invalid user identity' });
+        res.status(401).json({ error: 'Danh tính người dùng không hợp lệ.' });
         return;
       }
       if (!isSqlConfigured()) {
         res.json({
           uid: req.user.uid,
           email: req.user.email ?? '',
-          name: req.user.name ?? 'Auditor',
+          name: req.user.name ?? 'Kiểm toán viên',
           persistence_mode: 'LOCAL_DEMO_PERSISTENCE',
         });
         return;
@@ -260,7 +260,10 @@ async function startServer() {
       });
     } catch (err) {
       res.status(500).json({
-        error: err instanceof Error ? err.message : 'Session sync failed',
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Đồng bộ phiên đăng nhập thất bại.',
       });
     }
   });
@@ -284,7 +287,7 @@ async function startServer() {
         source,
       });
     } catch {
-      res.status(404).json({ error: 'Contract source not found' });
+      res.status(404).json({ error: 'Không tìm thấy mã nguồn hợp đồng.' });
     }
   });
 
@@ -322,6 +325,7 @@ async function startServer() {
       'currency',
       'unit',
       'formula',
+      'source_document',
       'source_page',
       'source_location',
       'evidence',
@@ -342,6 +346,7 @@ async function startServer() {
         c.currency,
         c.unit,
         c.formula ?? '',
+        c.source_document,
         c.source_page ?? '',
         c.source_location,
         c.evidence,
@@ -349,7 +354,7 @@ async function startServer() {
         .map(escapeCsv)
         .join(','),
     );
-    const csvContent = [headers.join(','), ...rows].join('\n');
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader(
       'Content-Disposition',
@@ -389,7 +394,10 @@ async function startServer() {
       res.json(payload);
     } catch (err) {
       res.status(500).json({
-        error: err instanceof Error ? err.message : 'Failed to load workspace',
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Không thể tải không gian làm việc.',
       });
     }
   });
@@ -398,7 +406,7 @@ async function startServer() {
     const { tolerance_percent } = req.body as { tolerance_percent?: number };
     const val = Number(tolerance_percent);
     if (!Number.isFinite(val) || val < 0 || val > 25) {
-      res.status(400).json({ error: 'Tolerance must be between 0% and 25%.' });
+      res.status(400).json({ error: 'Ngưỡng sai số phải nằm trong khoảng từ 0% đến 25%.' });
       return;
     }
 
@@ -410,8 +418,8 @@ async function startServer() {
     demo.activities.unshift({
       id: `ACT-${Date.now()}`,
       report_id: demo.active_report_id,
-      title: 'Verification Tolerance Updated',
-      description: `Numerical tolerance set to +/-${val}% and reports re-verified.`,
+      title: 'Đã cập nhật ngưỡng sai số xác minh',
+      description: `Ngưỡng sai số đặt thành +/-${val}% và đã xác minh lại toàn bộ báo cáo.`,
       status: 'info',
       timestamp: new Date().toISOString(),
     });
@@ -423,7 +431,7 @@ async function startServer() {
     try {
       const file = req.file;
       if (!file) {
-        res.status(400).json({ error: 'Please select a PDF, Excel, CSV, or JSON report file.' });
+        res.status(400).json({ error: 'Vui lòng chọn tệp báo cáo PDF, Excel, CSV hoặc JSON.' });
         return;
       }
 
@@ -444,7 +452,7 @@ async function startServer() {
         body.report_type === 'Separate' ? 'Separate' : 'Consolidated';
       const fiscalYear = body.fiscal_year?.trim() || '2025';
       const currency = body.currency?.trim() || 'VND';
-      const unit = body.unit?.trim() || 'Billion VND';
+      const unit = body.unit?.trim() || 'Tỷ VND';
 
       const processed = await processUploadedDocument({
         buffer: file.buffer,
@@ -575,8 +583,8 @@ async function startServer() {
         demo.activities.unshift({
           id: `ACT-${Date.now()}`,
           report_id: verifiedReport.id,
-          title: `Uploaded & Analyzed ${processed.originalFilename}`,
-          description: `${extraction.claims.length} claims extracted (${extraction.extractor}) and verified.`,
+          title: `Đã tải lên & phân tích ${processed.originalFilename}`,
+          description: `Đã trích xuất ${extraction.claims.length} chỉ tiêu (${extraction.extractor}) và chạy xác minh.`,
           status:
             verifiedReport.status === 'VERIFIED' ? 'verified' : 'warning',
           timestamp: new Date().toISOString(),
@@ -594,7 +602,7 @@ async function startServer() {
         error:
           err instanceof Error
             ? err.message
-            : 'Document extraction failed.',
+            : 'Trích xuất tài liệu thất bại.',
       });
     }
   });
@@ -604,7 +612,7 @@ async function startServer() {
       const { reportId } = req.params;
       const { claims } = req.body as { claims?: FinancialClaimInput[] };
       if (!Array.isArray(claims)) {
-        res.status(400).json({ error: 'Claims array is required.' });
+        res.status(400).json({ error: 'Cần danh sách chỉ tiêu hợp lệ.' });
         return;
       }
 
@@ -615,7 +623,7 @@ async function startServer() {
           .from(reportsTable)
           .where(eq(reportsTable.reportCode, reportId));
         if (repRows.length === 0) {
-          res.status(404).json({ error: 'Report not found.' });
+          res.status(404).json({ error: 'Không tìm thấy báo cáo.' });
           return;
         }
         const repRow = repRows[0];
@@ -698,7 +706,7 @@ async function startServer() {
       const demo = await loadDemoDatabase();
       const idx = demo.reports.findIndex((r) => r.id === reportId);
       if (idx === -1) {
-        res.status(404).json({ error: 'Report not found.' });
+        res.status(404).json({ error: 'Không tìm thấy báo cáo.' });
         return;
       }
 
@@ -714,8 +722,8 @@ async function startServer() {
       demo.activities.unshift({
         id: `ACT-${Date.now()}`,
         report_id: reportId,
-        title: `Claims Edited & Re-Verified (${reportId})`,
-        description: `Updated ${claims.length} claims and ran deterministic verification rules.`,
+        title: `Đã sửa & xác minh lại chỉ tiêu (${reportId})`,
+        description: `Đã cập nhật ${claims.length} chỉ tiêu và chạy lại quy tắc xác minh.`,
         status: updated.status === 'VERIFIED' ? 'verified' : 'warning',
         timestamp: new Date().toISOString(),
       });
@@ -723,7 +731,7 @@ async function startServer() {
       res.json({ report: updated });
     } catch (err) {
       res.status(400).json({
-        error: err instanceof Error ? err.message : 'Failed to update claims',
+        error: err instanceof Error ? err.message : 'Cập nhật chỉ tiêu thất bại',
       });
     }
   });
@@ -744,12 +752,12 @@ async function startServer() {
         body.decision !== 'MISMATCH' &&
         body.decision !== 'INSUFFICIENT EVIDENCE'
       ) {
-        res.status(400).json({ error: 'Invalid human review decision.' });
+        res.status(400).json({ error: 'Quyết định kiểm toán thủ công không hợp lệ.' });
         return;
       }
       if (!body.reviewer_name?.trim() || !body.comment?.trim()) {
         res.status(400).json({
-          error: 'Reviewer name and review comments are required.',
+          error: 'Vui lòng nhập tên kiểm toán viên và nhận xét kiểm tra.',
         });
         return;
       }
@@ -761,7 +769,7 @@ async function startServer() {
           .from(reportsTable)
           .where(eq(reportsTable.reportCode, reportId));
         if (repRows.length === 0) {
-          res.status(404).json({ error: 'Report not found.' });
+          res.status(404).json({ error: 'Không tìm thấy báo cáo.' });
           return;
         }
         const repClaims = await db
@@ -770,7 +778,7 @@ async function startServer() {
           .where(eq(claimsTable.reportId, repRows[0].id));
         const target = repClaims.find((c) => c.claimCode === claimId);
         if (!target) {
-          res.status(404).json({ error: 'Claim not found.' });
+          res.status(404).json({ error: 'Không tìm thấy chỉ tiêu.' });
           return;
         }
         const prevVal = target.reportedValue;
@@ -824,7 +832,7 @@ async function startServer() {
       const demo = await loadDemoDatabase();
       const idx = demo.reports.findIndex((r) => r.id === reportId);
       if (idx === -1) {
-        res.status(404).json({ error: 'Report not found.' });
+        res.status(404).json({ error: 'Không tìm thấy báo cáo.' });
         return;
       }
       const report = demo.reports[idx];
@@ -832,7 +840,7 @@ async function startServer() {
         (c) => c.claim_id === claimId,
       );
       if (claimIdx === -1) {
-        res.status(404).json({ error: 'Claim not found.' });
+        res.status(404).json({ error: 'Không tìm thấy chỉ tiêu.' });
         return;
       }
 
@@ -867,8 +875,8 @@ async function startServer() {
       demo.activities.unshift({
         id: `ACT-${Date.now()}`,
         report_id: reportId,
-        title: `HITL Review Recorded on ${claimId}`,
-        description: `${body.decision} by ${reviewRecord.reviewer_name}: ${reviewRecord.comment}`,
+        title: `Đã lưu đánh giá HITL cho ${claimId}`,
+        description: `${body.decision} bởi ${reviewRecord.reviewer_name}: ${reviewRecord.comment}`,
         status: body.decision === 'VERIFIED' ? 'verified' : 'error',
         timestamp: new Date().toISOString(),
       });
@@ -876,7 +884,7 @@ async function startServer() {
       res.json({ report: updatedReport });
     } catch (err) {
       res.status(400).json({
-        error: err instanceof Error ? err.message : 'Failed to save HITL review',
+        error: err instanceof Error ? err.message : 'Không thể lưu đánh giá HITL',
       });
     }
   });
@@ -903,7 +911,7 @@ async function startServer() {
           .from(reportsTable)
           .where(eq(reportsTable.reportCode, reportId));
         if (repRows.length === 0) {
-          res.status(404).json({ error: 'Report not found.' });
+          res.status(404).json({ error: 'Không tìm thấy báo cáo.' });
           return;
         }
         const repRow = repRows[0];
@@ -937,13 +945,13 @@ async function startServer() {
       const demo = await loadDemoDatabase();
       const idx = demo.reports.findIndex((r) => r.id === reportId);
       if (idx === -1) {
-        res.status(404).json({ error: 'Report not found.' });
+        res.status(404).json({ error: 'Không tìm thấy báo cáo.' });
         return;
       }
 
       const report = demo.reports[idx];
       if (!report.evidence_report) {
-        res.status(400).json({ error: 'Generate Evidence Report first.' });
+        res.status(400).json({ error: 'Vui lòng tạo Báo cáo bằng chứng trước.' });
         return;
       }
 
@@ -987,9 +995,9 @@ async function startServer() {
         id: `ACT-${Date.now()}`,
         report_id: report.id,
         title: isLiveWalletTx
-          ? `Registered on Avalanche Fuji (${report.id})`
-          : `Recorded Demo Blockchain Entry (${report.id})`,
-        description: `Report & Evidence hashes recorded (${record.mode}).`,
+          ? `Đã ghi nhận lên Avalanche Fuji (${report.id})`
+          : `Đã ghi bản mô phỏng Blockchain (${report.id})`,
+        description: `Đã lưu mã băm báo cáo & bằng chứng (${record.mode}).`,
         status: 'verified',
         timestamp: new Date().toISOString(),
       });
@@ -1001,7 +1009,7 @@ async function startServer() {
         error:
           err instanceof Error
             ? err.message
-            : 'Failed to record blockchain entry',
+            : 'Không thể ghi bản ghi Blockchain',
       });
     }
   });
@@ -1027,7 +1035,7 @@ async function startServer() {
       }
 
       if (!target || !target.evidence_report) {
-        res.status(404).json({ error: 'Evidence report not found.' });
+        res.status(404).json({ error: 'Không tìm thấy báo cáo bằng chứng.' });
         return;
       }
 
@@ -1041,7 +1049,7 @@ async function startServer() {
     } catch (err) {
       res.status(500).json({
         error:
-          err instanceof Error ? err.message : 'PDF generation failed',
+          err instanceof Error ? err.message : 'Tạo tệp PDF thất bại.',
       });
     }
   });

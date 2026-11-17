@@ -300,8 +300,8 @@ export async function loadPostgresWorkspace(params: {
       activities.push({
         id: `ACT-RPT-${rep.id}`,
         report_id: rep.reportCode,
-        title: `Report ${rep.reportCode} Stored in PostgreSQL`,
-        description: `${results.length} claims · ${evidenceReport.summary.verified} VERIFIED, ${evidenceReport.summary.mismatch} MISMATCH`,
+        title: `Đã lưu báo cáo ${rep.reportCode} trong PostgreSQL`,
+        description: `${results.length} chỉ tiêu · ${evidenceReport.summary.verified} Đã xác minh, ${evidenceReport.summary.mismatch} Sai lệch`,
         status: evidenceReport.summary.mismatch > 0 ? 'warning' : 'verified',
         timestamp: rep.createdAt.toISOString(),
       });
@@ -319,7 +319,7 @@ export async function loadPostgresWorkspace(params: {
     };
   } catch (error) {
     console.error('Database query failed in loadPostgresWorkspace:', error);
-    throw new Error('Failed to load workspace from PostgreSQL.', {
+    throw new Error('Không thể tải dữ liệu từ PostgreSQL.', {
       cause: error,
     });
   }

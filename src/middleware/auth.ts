@@ -13,7 +13,7 @@ export const requireAuth = async (
 ) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Unauthorized: Missing authentication token' });
+    res.status(401).json({ error: 'Chưa xác thực: Thiếu mã thông báo đăng nhập.' });
     return;
   }
 
@@ -24,6 +24,6 @@ export const requireAuth = async (
     next();
   } catch (error) {
     console.error('Error verifying Firebase ID token:', error);
-    res.status(401).json({ error: 'Unauthorized: Invalid authentication token' });
+    res.status(401).json({ error: 'Chưa xác thực: Mã thông báo không hợp lệ.' });
   }
 };

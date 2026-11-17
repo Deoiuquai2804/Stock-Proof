@@ -20,7 +20,7 @@ function round2(n: number): number {
 }
 
 /**
- * Normalizes VND, Million VND, and Billion VND to a common target unit (typically Billion VND).
+ * Quy đổi các đơn vị tiền tệ VND, Triệu VND và Tỷ VND về cùng một đơn vị chuẩn.
  */
 export function normalizeFinancialValue(
   value: number,
@@ -68,7 +68,7 @@ export function normalizeFinancialValue(
 }
 
 /**
- * Deterministic formula recalculation (Rule 5).
+ * Tính toán lại công thức xác định (Quy tắc 5).
  */
 export function recalculateFormula(ref: ReferenceMetric): number | null {
   const ops = ref.formula_operands;
@@ -76,21 +76,26 @@ export function recalculateFormula(ref: ReferenceMetric): number | null {
 
   switch (ref.metric) {
     case 'Gross Profit':
+    case 'Lợi nhuận gộp':
       return round2((ops['Revenue'] ?? 0) - (ops['Cost of Goods Sold'] ?? 0));
     case 'Total Liabilities':
+    case 'Nợ phải trả':
       return round2((ops['Total Assets'] ?? 0) - (ops['Total Equity'] ?? 0));
-    case 'Revenue Growth': {
+    case 'Revenue Growth':
+    case 'Tăng trưởng doanh thu': {
       const prev = ops['previous_revenue'] ?? 0;
       const curr = ops['current_revenue'] ?? 0;
       if (prev === 0) return null;
       return round2(((curr - prev) / prev) * 100);
     }
-    case 'Gross Profit Margin': {
+    case 'Gross Profit Margin':
+    case 'Biên lợi nhuận gộp': {
       const rev = ops['Revenue'] ?? 0;
       const gp = ops['Gross Profit'] ?? 0;
       return rev ? round2((gp / rev) * 100) : null;
     }
-    case 'Net Profit Margin': {
+    case 'Net Profit Margin':
+    case 'Biên lợi nhuận ròng': {
       const rev = ops['Revenue'] ?? 0;
       const np = ops['Net Profit After Tax'] ?? 0;
       return rev ? round2((np / rev) * 100) : null;
@@ -105,7 +110,8 @@ export function recalculateFormula(ref: ReferenceMetric): number | null {
       const np = ops['Net Profit After Tax'] ?? 0;
       return equity ? round2((np / equity) * 100) : null;
     }
-    case 'Debt-to-Equity': {
+    case 'Debt-to-Equity':
+    case 'Nợ trên Vốn chủ sở hữu': {
       const equity = ops['Total Equity'] ?? 0;
       const liab = ops['Total Liabilities'] ?? 0;
       return equity ? round2(liab / equity) : null;
@@ -139,20 +145,20 @@ export function verifyClaimDeterministic(
       Boolean(claim.source_location && claim.source_location.trim().length > 0)) &&
     Boolean(claim.evidence && claim.evidence.trim().length > 0);
 
-  // RULE 7: Missing Evidence check
+  // QUY TẮC 7: Kiểm tra nguồn & bằng chứng
   rules.push({
     rule: 'MISSING_EVIDENCE',
-    label: 'Source & Evidence Presence',
+    label: 'Nguồn tài liệu & Bằng chứng',
     passed: hasEvidence,
     expected: ref
-      ? `${ref.source_document} (p.${ref.source_page})`
-      : 'Cited source document, page & evidence excerpt',
+      ? `${ref.source_document} (Tr.${ref.source_page})`
+      : 'Có tên tài liệu, số trang và trích dẫn bằng chứng',
     actual: hasEvidence
-      ? `${claim.source_document} (p.${claim.source_page ?? '?'})`
-      : 'Missing source document or page reference',
+      ? `${claim.source_document} (Tr.${claim.source_page ?? '?'})`
+      : 'Thiếu tài liệu nguồn hoặc số trang trích dẫn',
     detail: hasEvidence
-      ? 'Supporting source document and excerpt provided.'
-      : 'Supporting source document, page, or evidence excerpt is missing.',
+      ? 'Đã cung cấp đầy đủ tài liệu nguồn và đoạn trích dẫn đối chiếu.'
+      : 'Thiếu tên tài liệu nguồn, số trang hoặc đoạn trích dẫn bằng chứng.',
   });
 
   if (!ref) {
@@ -178,7 +184,7 @@ export function verifyClaimDeterministic(
       source_document: claim.source_document,
       source_page: claim.source_page,
       source_location: claim.source_location,
-      reference_source: 'No trusted reference entry found',
+      reference_source: 'Không tìm thấy chỉ tiêu trong bộ dữ liệu chuẩn',
       reference_page: null,
       evidence: claim.evidence,
       auto_status: 'INSUFFICIENT EVIDENCE',
@@ -186,7 +192,7 @@ export function verifyClaimDeterministic(
       verification_source: options?.humanReview
         ? 'HUMAN_APPROVED'
         : 'AUTOMATIC_ENGINE',
-      explanation: `No reference dataset record found for metric "${claim.metric}". Cannot verify without trusted baseline data.`,
+      explanation: `Không tìm thấy dữ liệu tham chiếu cho chỉ tiêu "${claim.metric}". Không thể xác minh khi thiếu dữ liệu gốc đáng tin cậy.`,
       rules,
       human_review: options?.humanReview ?? null,
       timestamp,
@@ -196,36 +202,42 @@ export function verifyClaimDeterministic(
   const expectedPeriod = options?.expectedPeriod ?? ref.period;
   const expectedReportType = options?.expectedReportType ?? ref.report_type;
 
-  // RULE 2: Reporting Period Validation
+  // QUY TẮC 2: Kiểm tra kỳ báo cáo
   const periodMatch =
     claim.period.trim().toUpperCase() === expectedPeriod.trim().toUpperCase();
   rules.push({
     rule: 'PERIOD',
-    label: 'Reporting Period',
+    label: 'Kỳ báo cáo',
     passed: periodMatch,
     expected: expectedPeriod,
-    actual: claim.period || 'Unspecified',
+    actual: claim.period || 'Chưa xác định',
     detail: periodMatch
-      ? `Reporting period matches ${expectedPeriod}.`
-      : `Seller Agent reported period "${claim.period}", but expected reporting period is "${expectedPeriod}".`,
+      ? `Kỳ báo cáo khớp với ${expectedPeriod}.`
+      : `Seller Agent báo cáo kỳ "${claim.period}", nhưng kỳ báo cáo cần đối chiếu là "${expectedPeriod}".`,
   });
 
-  // RULE 4: Report Type Validation
+  // QUY TẮC 4: Kiểm tra loại báo cáo
+  const formatReportTypeVi = (rt: string) =>
+    rt.trim().toLowerCase() === 'consolidated'
+      ? 'Hợp nhất'
+      : rt.trim().toLowerCase() === 'separate'
+        ? 'Công ty mẹ'
+        : rt;
   const reportTypeMatch =
     claim.report_type.trim().toLowerCase() ===
     expectedReportType.trim().toLowerCase();
   rules.push({
     rule: 'REPORT_TYPE',
-    label: 'Statement Scope',
+    label: 'Phạm vi báo cáo',
     passed: reportTypeMatch,
-    expected: expectedReportType,
-    actual: claim.report_type,
+    expected: formatReportTypeVi(expectedReportType),
+    actual: formatReportTypeVi(claim.report_type),
     detail: reportTypeMatch
-      ? `Statement scope matches ${expectedReportType}.`
-      : `Report type mismatch: "${claim.report_type}" vs "${expectedReportType}".`,
+      ? `Phạm vi báo cáo khớp với ${formatReportTypeVi(expectedReportType)}.`
+      : `Sai lệch phạm vi báo cáo: "${formatReportTypeVi(claim.report_type)}" so với "${formatReportTypeVi(expectedReportType)}".`,
   });
 
-  // RULE 3: Unit Validation & Normalization
+  // QUY TẮC 3: Kiểm tra & quy đổi đơn vị
   const norm =
     claim.reported_value !== null
       ? normalizeFinancialValue(claim.reported_value, claim.unit, ref.unit)
@@ -233,19 +245,19 @@ export function verifyClaimDeterministic(
   const unitValid = norm.unitMatched || norm.convertible;
   rules.push({
     rule: 'UNIT',
-    label: 'Unit & Normalization',
+    label: 'Đơn vị tính & Quy đổi',
     passed: unitValid,
     warning: !norm.unitMatched && norm.convertible,
     expected: ref.unit,
     actual: claim.unit,
     detail: norm.unitMatched
-      ? `Unit matches standard (${ref.unit}).`
+      ? `Đơn vị khớp chuẩn (${ref.unit}).`
       : norm.convertible
-        ? `Unit "${claim.unit}" normalized to "${ref.unit}" (${claim.reported_value} ${claim.unit} = ${round2(norm.value)} ${ref.unit}).`
-        : `Incompatible unit "${claim.unit}" vs expected "${ref.unit}".`,
+        ? `Đã quy đổi đơn vị "${claim.unit}" sang "${ref.unit}" (${claim.reported_value} ${claim.unit} = ${round2(norm.value)} ${ref.unit}).`
+        : `Đơn vị không tương thích "${claim.unit}" so với chuẩn "${ref.unit}".`,
   });
 
-  // RULE 5: Formula Validation
+  // QUY TẮC 5: Tính toán lại công thức
   const recalculated = recalculateFormula(ref);
   let formulaPassed = true;
   if (recalculated !== null && claim.reported_value !== null) {
@@ -257,17 +269,17 @@ export function verifyClaimDeterministic(
     formulaPassed = unitValid && formulaDiffPct <= tolerance;
     rules.push({
       rule: 'FORMULA',
-      label: 'Formula Recalculation',
+      label: 'Tính toán lại công thức',
       passed: formulaPassed,
       expected: `${ref.formula} = ${recalculated} ${ref.unit}`,
       actual: `${round2(compareVal)} ${ref.unit}`,
       detail: formulaPassed
-        ? `Deterministic recalculation (${ref.formula}) confirmed ${recalculated} ${ref.unit}.`
-        : `The Seller Agent reported ${claim.reported_value} ${claim.unit}, but recalculation using the source financial statements (${ref.formula}) produced ${recalculated} ${ref.unit}.`,
+        ? `Tính toán xác định theo công thức (${ref.formula}) khớp kết quả ${recalculated} ${ref.unit}.`
+        : `Seller Agent báo cáo ${claim.reported_value} ${claim.unit}, nhưng tính toán lại từ BCTC gốc (${ref.formula}) cho kết quả ${recalculated} ${ref.unit}.`,
     });
   }
 
-  // RULE 1: Numerical Validation
+  // QUY TẮC 1: Kiểm tra độ chính xác số liệu
   const normalizedReported =
     claim.reported_value !== null && norm.convertible
       ? round2(norm.value)
@@ -290,22 +302,22 @@ export function verifyClaimDeterministic(
 
   rules.push({
     rule: 'NUMERICAL',
-    label: 'Numerical Accuracy',
+    label: 'Độ chính xác số liệu',
     passed: numericalPassed,
     expected: `${ref.reference_value} ${ref.unit}`,
     actual:
       normalizedReported !== null
         ? `${normalizedReported} ${ref.unit}`
-        : 'Missing value',
+        : 'Thiếu giá trị',
     detail:
       normalizedReported === null
-        ? 'Reported value is missing.'
+        ? 'Thiếu giá trị số liệu báo cáo.'
         : numericalPassed
-          ? `Normalized value ${normalizedReported} ${ref.unit} matches reference ${ref.reference_value} ${ref.unit} (within ${tolerance}% tolerance).`
-          : `Seller value (${normalizedReported} ${ref.unit}) differs from reference (${ref.reference_value} ${ref.unit}) by ${diffPct}%.`,
+          ? `Giá trị quy đổi ${normalizedReported} ${ref.unit} khớp với số liệu chuẩn ${ref.reference_value} ${ref.unit} (trong ngưỡng +/-${tolerance}%).`
+          : `Giá trị Seller (${normalizedReported} ${ref.unit}) chênh lệch so với số liệu chuẩn (${ref.reference_value} ${ref.unit}) là ${diffPct}%.`,
   });
 
-  // RULE 6 & 8: Evidence Validation & Human Review check
+  // QUY TẮC 6 & 8: Kiểm tra tính mơ hồ & duyệt thủ công
   const requiresHuman = Boolean(
     claim.uncertain ||
       claim.claim_type === 'subjective_claim' ||
@@ -313,59 +325,59 @@ export function verifyClaimDeterministic(
   );
   rules.push({
     rule: 'HUMAN_REVIEW',
-    label: 'Ambiguity & Subjectivity Check',
+    label: 'Kiểm tra tính mơ hồ & chủ quan',
     passed: !requiresHuman,
     warning: requiresHuman,
-    expected: 'Unambiguous factual claim',
-    actual: requiresHuman ? 'Ambiguous / Conflicting evidence' : 'Clear',
+    expected: 'Chỉ tiêu khách quan, không xung đột',
+    actual: requiresHuman ? 'Mơ hồ / Có xung đột thuyết minh' : 'Rõ ràng',
     detail: requiresHuman
       ? claim.ambiguous_reason ||
         ref.ambiguity_note ||
-        'Ambiguous or conflicting source requires manual human review.'
-      : 'No ambiguity or conflicting disclosure detected.',
+        'Nguồn tài liệu có điểm mơ hồ hoặc xung đột, cần kiểm toán viên rà soát thủ công.'
+      : 'Không phát hiện điểm mơ hồ hay mâu thuẫn thuyết minh.',
   });
 
-  // Determine Final Automated Status & Primary Validation Rule
+  // Xác định trạng thái tự động và quy tắc chính
   let autoStatus: VerificationStatus = 'VERIFIED';
   let primaryRule: ValidationRuleType = 'NUMERICAL';
-  let explanation = `Verified against ${ref.source_document} (p.${ref.source_page}, ${ref.source_location}).`;
+  let explanation = `Đã xác minh khớp với ${ref.source_document} (Tr.${ref.source_page}, ${ref.source_location}).`;
 
   if (!hasEvidence || claim.reported_value === null) {
     autoStatus = 'INSUFFICIENT EVIDENCE';
     primaryRule = 'MISSING_EVIDENCE';
     explanation =
       claim.reported_value === null
-        ? `Cannot verify ${claim.metric}: extracted numeric value is missing.`
-        : `Cannot verify ${claim.metric}: supporting source document, page number, or evidence excerpt is missing.`;
+        ? `Không thể xác minh ${claim.metric}: thiếu giá trị số liệu trích xuất.`
+        : `Không thể xác minh ${claim.metric}: thiếu tài liệu nguồn, số trang hoặc đoạn trích dẫn bằng chứng.`;
   } else if (!periodMatch) {
     autoStatus = 'MISMATCH';
     primaryRule = 'PERIOD';
-    explanation = `The Seller Agent reported ${claim.metric} for period "${claim.period}" (${claim.reported_value} ${claim.unit}), conflicting with the expected "${expectedPeriod}" reference (${ref.reference_value} ${ref.unit}).`;
+    explanation = `Seller Agent báo cáo ${claim.metric} cho kỳ "${claim.period}" (${claim.reported_value} ${claim.unit}), mâu thuẫn với kỳ đối chiếu chuẩn "${expectedPeriod}" (${ref.reference_value} ${ref.unit}).`;
   } else if (!reportTypeMatch) {
     autoStatus = 'MISMATCH';
     primaryRule = 'REPORT_TYPE';
-    explanation = `Statement scope mismatch: claim cites "${claim.report_type}" instead of "${expectedReportType}".`;
+    explanation = `Sai phạm vi báo cáo: chỉ tiêu trích dẫn "${claim.report_type}" thay vì "${expectedReportType}".`;
   } else if (!unitValid) {
     autoStatus = 'MISMATCH';
     primaryRule = 'UNIT';
-    explanation = `Unit mismatch: Seller reported "${claim.unit}" which cannot be reconciled with "${ref.unit}".`;
+    explanation = `Sai đơn vị tính: Seller báo cáo "${claim.unit}" không thể quy đổi về "${ref.unit}".`;
   } else if (requiresHuman) {
     autoStatus = 'NEEDS HUMAN REVIEW';
     primaryRule = 'HUMAN_REVIEW';
     explanation =
       claim.ambiguous_reason ||
       ref.ambiguity_note ||
-      `Seller reported ${normalizedReported} ${ref.unit} vs reference ${ref.reference_value} ${ref.unit}; conflicting or subjective footnote requires human auditor review.`;
+      `Seller báo cáo ${normalizedReported} ${ref.unit} so với chuẩn ${ref.reference_value} ${ref.unit}; có thuyết minh mang tính chủ quan hoặc xung đột, cần kiểm toán viên duyệt.`;
   } else if (recalculated !== null && !formulaPassed) {
     autoStatus = 'MISMATCH';
     primaryRule = 'FORMULA';
-    explanation = `The Seller Agent reported ${claim.metric.toLowerCase()} of ${claim.reported_value}${claim.unit === '%' ? '%' : ` ${claim.unit}`}, but recalculation using the source financial statements (${ref.formula}) produced ${recalculated}${ref.unit === '%' ? '%' : ` ${ref.unit}`}.`;
+    explanation = `Seller Agent báo cáo ${claim.metric} là ${claim.reported_value}${claim.unit === '%' ? '%' : ` ${claim.unit}`}, nhưng tính toán lại từ BCTC gốc (${ref.formula}) cho kết quả ${recalculated}${ref.unit === '%' ? '%' : ` ${ref.unit}`}.`;
   } else if (!numericalPassed) {
     autoStatus = 'MISMATCH';
     primaryRule = 'NUMERICAL';
-    explanation = `Numerical mismatch: Seller reported ${normalizedReported} ${ref.unit} vs trusted reference ${ref.reference_value} ${ref.unit} (${diffPct}% difference).`;
+    explanation = `Sai lệch số liệu: Seller báo cáo ${normalizedReported} ${ref.unit} so với số liệu chuẩn ${ref.reference_value} ${ref.unit} (lệch ${diffPct}%).`;
   } else if (!norm.unitMatched && norm.convertible) {
-    explanation = `Verified after unit normalization: ${claim.reported_value.toLocaleString('en-US')} ${claim.unit} equals ${normalizedReported} ${ref.unit}, matching ${ref.source_document} (p.${ref.source_page}).`;
+    explanation = `Đã xác minh sau khi quy đổi đơn vị: ${claim.reported_value.toLocaleString('en-US')} ${claim.unit} tương đương ${normalizedReported} ${ref.unit}, khớp với ${ref.source_document} (Tr.${ref.source_page}).`;
   }
 
   const finalStatus: VerificationStatus = options?.humanReview
@@ -376,7 +388,7 @@ export function verifyClaimDeterministic(
     options?.humanReview ? 'HUMAN_APPROVED' : 'AUTOMATIC_ENGINE';
 
   if (options?.humanReview) {
-    explanation = `Human Review (${options.humanReview.decision}) by ${options.humanReview.reviewer_name}: ${options.humanReview.comment}`;
+    explanation = `Kiểm toán viên duyệt (${options.humanReview.decision}) bởi ${options.humanReview.reviewer_name}: ${options.humanReview.comment}`;
   }
 
   const differenceLabel =
