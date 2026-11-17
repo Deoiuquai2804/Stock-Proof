@@ -1,504 +1,279 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Link2, RotateCcw } from 'lucide-react';
-import { BuyerDecisionBar } from './components/BuyerDecisionBar.tsx';
-import { ClaimInspector } from './components/ClaimInspector.tsx';
-import { ClaimsTable, type StatusFilter } from './components/ClaimsTable.tsx';
-import { EvidenceFujiView } from './components/EvidenceFujiView.tsx';
-import { PipelineStepper } from './components/PipelineStepper.tsx';
-import { SellerGroundTruthView } from './components/SellerGroundTruthView.tsx';
-import { Sidebar, type ActiveTab } from './components/Sidebar.tsx';
-import { TopBar } from './components/TopBar.tsx';
-import { COPY } from './lib/i18n.ts';
+import { Sidebar, type AppRoute } from './components/Sidebar';
+import { TopNav } from './components/TopNav';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { BlockchainPage } from './pages/BlockchainPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { EvidencePage } from './pages/EvidencePage';
+import { ReportsPage } from './pages/ReportsPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { UploadPage } from './pages/UploadPage';
+import { VerificationPage } from './pages/VerificationPage';
 import type {
-  Language,
-  ScenarioPresetId,
-  SellerClaim,
-  WorkspaceState,
-} from './types/stockproof.ts';
+  BlockchainRecord,
+  ReportRecord,
+  WorkspacePayload,
+} from './types/stockproof';
 
-export default function App() {
-  const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [isAnchoring, setIsAnchoring] = useState(false);
+const VALID_ROUTES: AppRoute[] = [
+  '/dashboard',
+  '/upload',
+  '/reports',
+  '/verification',
+  '/evidence',
+  '/blockchain',
+  '/settings',
+];
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('workbench');
-  const [lang, setLang] = useState<Language>('en');
+function resolveRouteFromPath(pathname: string): AppRoute {
+  const cleaned = pathname.replace(/\/+$/, '') || '/dashboard';
+  if (VALID_ROUTES.includes(cleaned as AppRoute)) {
+    return cleaned as AppRoute;
+  }
+  return '/dashboard';
+}
+
+function StockProofAppShell() {
+  const { user, loading: authLoading, getAuthHeaders } = useAuth();
+  const [route, setRoute] = useState<AppRoute>(() =>
+    resolveRouteFromPath(window.location.pathname),
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedClaimId, setSelectedClaimId] = useState<string | null>('CLM-10');
+  const [workspace, setWorkspace] = useState<WorkspacePayload | null>(null);
+  const [activeReportId, setActiveReportId] = useState<string>('');
+  const [loadingWorkspace, setLoadingWorkspace] = useState(true);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
-  const fetchWorkspace = useCallback(async () => {
-    try {
-      setLoadError(null);
-      const res = await fetch('/api/workspace');
-      if (!res.ok) throw new Error(`Failed to load workspace (${res.status})`);
-      const data = (await res.json()) as WorkspaceState;
-      setWorkspace(data);
-    } catch (err) {
-      setLoadError(
-        err instanceof Error ? err.message : 'Unable to reach StockProof API',
-      );
-    } finally {
-      setLoading(false);
+  const navigate = useCallback((nextRoute: AppRoute) => {
+    setRoute(nextRoute);
+    if (window.location.pathname !== nextRoute) {
+      window.history.pushState({}, '', nextRoute);
     }
   }, []);
 
   useEffect(() => {
-    fetchWorkspace();
-  }, [fetchWorkspace]);
+    const onPopState = () => {
+      setRoute(resolveRouteFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
-  const handleRunVerification = async (customClaims?: SellerClaim[]) => {
-    if (!workspace) return;
-    setActionError(null);
-    setIsVerifying(true);
+  const fetchWorkspace = useCallback(async () => {
+    setLoadingWorkspace(true);
+    setWorkspaceError(null);
     try {
-      const res = await fetch('/api/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          claims: customClaims ?? workspace.sellerClaims,
-        }),
-      });
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/workspace', { headers: authHeaders });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Verification failed');
-      setWorkspace(data as WorkspaceState);
-      if (customClaims) {
-        setActiveTab('workbench');
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load StockProof workspace.');
       }
+      const payload = data as WorkspacePayload;
+      setWorkspace(payload);
+      setActiveReportId((prev) =>
+        prev && payload.reports.some((r) => r.id === prev)
+          ? prev
+          : payload.active_report_id || payload.reports[0]?.id || '',
+      );
     } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : 'Verification failed',
+      setWorkspaceError(
+        err instanceof Error ? err.message : 'Unable to reach StockProof API.',
       );
     } finally {
-      setIsVerifying(false);
+      setLoadingWorkspace(false);
     }
+  }, [getAuthHeaders]);
+
+  useEffect(() => {
+    if (!authLoading) {
+      fetchWorkspace();
+    }
+  }, [authLoading, user?.uid, fetchWorkspace]);
+
+  const handleReportUpdated = (updatedReport: ReportRecord) => {
+    setWorkspace((prev) => {
+      if (!prev) return prev;
+      const exists = prev.reports.some((r) => r.id === updatedReport.id);
+      const nextReports = exists
+        ? prev.reports.map((r) =>
+            r.id === updatedReport.id ? updatedReport : r,
+          )
+        : [updatedReport, ...prev.reports];
+      return {
+        ...prev,
+        active_report_id: updatedReport.id,
+        reports: nextReports,
+      };
+    });
+    setActiveReportId(updatedReport.id);
   };
 
-  const handleResetScenario = async (scenarioId: ScenarioPresetId) => {
-    setActionError(null);
-    setIsVerifying(true);
-    try {
-      const res = await fetch('/api/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenarioId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Reset failed');
-      setWorkspace(data as WorkspaceState);
-      setStatusFilter('All');
-      setSearchQuery('');
-      setSelectedClaimId('CLM-10');
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Reset failed');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  const handleSubmitHitl = async (
-    claimId: string,
-    payload: {
-      decision: 'Verified' | 'Mismatch';
-      reviewerName: string;
-      reviewerRole: string;
-      note: string;
-    },
+  const handleRecordCreated = (
+    updatedReport: ReportRecord,
+    record: BlockchainRecord,
   ) => {
-    setActionError(null);
-    const res = await fetch(`/api/claims/${encodeURIComponent(claimId)}/hitl`, {
+    setWorkspace((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        reports: prev.reports.map((r) =>
+          r.id === updatedReport.id ? updatedReport : r,
+        ),
+        blockchain_records: [record, ...prev.blockchain_records],
+      };
+    });
+  };
+
+  const handleToleranceSaved = async (newTolerance: number) => {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch('/api/settings/tolerance', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      body: JSON.stringify({ tolerance_percent: newTolerance }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'HITL submission failed');
-    setWorkspace(data as WorkspaceState);
+    if (!res.ok) throw new Error(data.error || 'Failed to update tolerance.');
+    await fetchWorkspace();
   };
 
-  const handleAnchorFuji = async (txHash?: string) => {
-    setActionError(null);
-    setIsAnchoring(true);
-    try {
-      const res = await fetch('/api/anchor-fuji', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ txHash }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Fuji anchoring failed');
-      setWorkspace(data as WorkspaceState);
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : 'Fuji anchoring failed',
-      );
-      throw err;
-    } finally {
-      setIsAnchoring(false);
-    }
+  const handleResetDemo = async () => {
+    const res = await fetch('/api/reset', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to reset demo scenario.');
+    await fetchWorkspace();
   };
-
-  const handleBuyerDecision = async (payload: {
-    decision: 'Accepted' | 'Revision Requested';
-    buyerName: string;
-    note: string;
-  }) => {
-    setActionError(null);
-    const res = await fetch('/api/buyer-decision', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Buyer decision failed');
-    setWorkspace(data as WorkspaceState);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-4xl space-y-4">
-          <div className="h-10 bg-slate-200 rounded animate-pulse w-1/3" />
-          <div className="h-24 bg-slate-200 rounded animate-pulse" />
-          <div className="h-96 bg-slate-200 rounded animate-pulse" />
-        </div>
-      </div>
-    );
-  }
-
-  if (loadError || !workspace) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="bg-white border border-slate-200 rounded-lg p-6 max-w-md w-full space-y-4">
-          <h1 className="font-display text-lg font-semibold text-slate-900">
-            Unable to load StockProof Workspace
-          </h1>
-          <p className="text-sm text-red-700">{loadError || 'Unknown error'}</p>
-          <button
-            type="button"
-            onClick={fetchWorkspace}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const t = COPY[lang];
-  const sectionLabel = t.nav[activeTab];
-  const claims = workspace.evidenceReport?.claims ?? [];
-  const selectedClaim =
-    claims.find((c) => c.claimId === selectedClaimId) ?? null;
-  const summary = workspace.evidenceReport?.summary;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex">
+    <div className="min-h-screen bg-[#0B1120] text-[#F8FAFC] flex">
       <Sidebar
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        lang={lang}
-        enterpriseName={workspace.enterprise.name}
-        ticker={workspace.enterprise.ticker}
-        exchange={workspace.enterprise.exchange}
-        period={workspace.enterprise.reportingPeriod}
+        currentRoute={route}
+        onNavigate={navigate}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        activeReportId={activeReportId}
       />
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <TopBar
-          ticker={workspace.enterprise.ticker}
-          exchange={workspace.enterprise.exchange}
-          period={workspace.enterprise.reportingPeriod}
-          sectionLabel={sectionLabel}
-          lang={lang}
-          isVerifying={isVerifying}
-          onRunVerification={() => handleRunVerification()}
+        <TopNav
+          currentRoute={route}
+          onNavigate={navigate}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
         />
 
-        <main className="flex-1 p-4 sm:p-6 max-w-[1400px] w-full mx-auto space-y-5">
-          {actionError && (
-            <div
-              role="alert"
-              className="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-lg"
-            >
-              {actionError}
+        <main className="flex-1 p-4 sm:p-6 max-w-[1440px] w-full mx-auto">
+          {loadingWorkspace && !workspace ? (
+            <div className="bg-[#172033] border border-slate-800/80 rounded-xl p-10 text-center text-sm text-[#94A3B8]">
+              Đang tải không gian làm việc xác minh StockProof...
             </div>
-          )}
-
-          {/* Workspace Context & Controls Bar */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div>
-              <h1 className="font-display text-xl sm:text-2xl font-semibold text-slate-900 text-balance">
-                {workspace.enterprise.name}
-              </h1>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 mt-1">
-                <span>
-                  {workspace.enterprise.exchange}: {workspace.enterprise.ticker}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>{workspace.enterprise.statementType}</span>
-                <span aria-hidden="true">·</span>
-                <span>{workspace.enterprise.auditor}</span>
+          ) : workspaceError ? (
+            <div className="bg-[#172033] border border-[#EF4444]/40 rounded-xl p-6 space-y-3">
+              <div className="text-sm font-semibold text-[#EF4444]">
+                Lỗi tải dữ liệu hệ thống
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full lg:w-auto">
-              <div className="grid grid-cols-2 sm:inline-flex items-center gap-1 p-1 bg-slate-200/70 rounded-lg w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => handleResetScenario('faulty-demo')}
-                  disabled={isVerifying}
-                  className={`px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-colors truncate ${
-                    workspace.scenarioId === 'faulty-demo'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {t.toolbar.presetFaulty}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleResetScenario('clean-revised')}
-                  disabled={isVerifying}
-                  className={`px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-colors truncate ${
-                    workspace.scenarioId === 'clean-revised'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {t.toolbar.presetClean}
-                </button>
-              </div>
-
-              <div
-                role="group"
-                aria-label="Language toggle"
-                className="inline-flex items-center gap-1 p-1 bg-slate-200/70 rounded-lg"
-              >
-                <button
-                  type="button"
-                  onClick={() => setLang('en')}
-                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                    lang === 'en'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  EN
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLang('vi')}
-                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                    lang === 'vi'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  VI
-                </button>
-              </div>
-
+              <p className="text-xs text-[#CBD5E1]">{workspaceError}</p>
               <button
                 type="button"
-                onClick={() => handleResetScenario(workspace.scenarioId)}
-                disabled={isVerifying}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors whitespace-nowrap"
+                onClick={fetchWorkspace}
+                className="px-3.5 py-2 rounded-lg bg-[#3B82F6] text-xs font-medium text-white"
               >
-                <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>{t.toolbar.resetDemo}</span>
+                Thử kết nối lại
               </button>
             </div>
-          </div>
-
-          {activeTab === 'workbench' && (
+          ) : workspace ? (
             <>
-              <PipelineStepper
-                lang={lang}
-                report={workspace.evidenceReport}
-                fujiAnchor={workspace.fujiAnchor}
-                buyerDecision={workspace.buyerDecision}
-              />
-
-              {/* 4-column KPI Summary Strip (flat single-elevation bar, zero nested cards) */}
-              {summary && (
-                <div className="bg-white border border-slate-200 rounded-lg grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('Verified')}
-                    className="p-4 text-left hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="text-xs font-medium text-slate-500">
-                      {t.kpi.verified}
-                    </div>
-                    <div className="text-2xl font-display font-semibold text-emerald-700 tabular-nums mt-1">
-                      {summary.verifiedCount}
-                      <span className="text-sm font-normal text-slate-400">
-                        /{summary.totalClaims}
-                      </span>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('Mismatch')}
-                    className="p-4 text-left hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="text-xs font-medium text-slate-500">
-                      {t.kpi.mismatch}
-                    </div>
-                    <div className="text-2xl font-display font-semibold text-red-700 tabular-nums mt-1">
-                      {summary.mismatchCount}
-                      <span className="text-sm font-normal text-slate-400">
-                        /{summary.totalClaims}
-                      </span>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('Insufficient Evidence')}
-                    className="p-4 text-left hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="text-xs font-medium text-slate-500">
-                      {t.kpi.insufficient}
-                    </div>
-                    <div className="text-2xl font-display font-semibold text-amber-700 tabular-nums mt-1">
-                      {summary.insufficientEvidenceCount}
-                      <span className="text-sm font-normal text-slate-400">
-                        /{summary.totalClaims}
-                      </span>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('Needs Human Review')}
-                    className="p-4 text-left hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="text-xs font-medium text-slate-500">
-                      {t.kpi.needsReview}
-                    </div>
-                    <div className="text-2xl font-display font-semibold text-indigo-700 tabular-nums mt-1">
-                      {summary.needsHumanReviewCount}
-                      <span className="text-sm font-normal text-slate-400">
-                        /{summary.totalClaims}
-                      </span>
-                    </div>
-                  </button>
-                </div>
+              {route === '/dashboard' && (
+                <DashboardPage
+                  workspace={workspace}
+                  activeReportId={activeReportId}
+                  onSelectReport={setActiveReportId}
+                  onNavigate={navigate}
+                />
               )}
 
-              {/* Evidence Report & Quick Fuji Anchor Strip */}
-              {workspace.evidenceReport && (
-                <div className="bg-white border border-slate-200 rounded-lg px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                  <div className="min-w-0 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                    <span className="font-semibold text-slate-900">
-                      Evidence Report {workspace.evidenceReport.reportId}
-                    </span>
-                    <span className="font-mono text-slate-600 truncate max-w-md">
-                      SHA-256: {workspace.evidenceReport.reportHash}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                    {workspace.fujiAnchor ? (
-                      <>
-                        <span className="text-xs font-mono text-emerald-700">
-                          Tx: {workspace.fujiAnchor.txHash.slice(0, 12)}...
-                          {workspace.fujiAnchor.txHash.slice(-6)}
-                        </span>
-                        <a
-                          href={workspace.fujiAnchor.explorerUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap"
-                        >
-                          <span>{t.fuji.openExplorer}</span>
-                          <ExternalLink className="w-3 h-3" aria-hidden="true" />
-                        </a>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={isAnchoring}
-                        onClick={() => handleAnchorFuji()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors whitespace-nowrap"
-                      >
-                        <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>
-                          {isAnchoring ? t.fuji.anchoring : t.fuji.anchorBtn}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                </div>
+              {route === '/upload' && (
+                <UploadPage
+                  onReportUploaded={(rep) => {
+                    handleReportUpdated(rep);
+                    fetchWorkspace();
+                  }}
+                  onClaimsSaved={(rep) => {
+                    handleReportUpdated(rep);
+                    fetchWorkspace();
+                  }}
+                  onNavigate={navigate}
+                />
               )}
 
-              {/* Main Full-Width Claims Grid (zero horizontal overflow on desktop) */}
-              <ClaimsTable
-                claims={claims}
-                selectedClaimId={selectedClaimId}
-                onSelectClaim={setSelectedClaimId}
-                statusFilter={statusFilter}
-                onChangeFilter={setStatusFilter}
-                searchQuery={searchQuery}
-                onChangeSearch={setSearchQuery}
-                lang={lang}
-              />
+              {route === '/reports' && (
+                <ReportsPage
+                  reports={workspace.reports}
+                  activeReportId={activeReportId}
+                  onSelectReport={setActiveReportId}
+                  onNavigate={navigate}
+                />
+              )}
 
-              {/* Audit Inspector + Buyer Final Decision Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                <div className="lg:col-span-7 min-w-0">
-                  <ClaimInspector
-                    claim={selectedClaim}
-                    lang={lang}
-                    onClose={() => setSelectedClaimId(null)}
-                    onSubmitHitl={handleSubmitHitl}
-                  />
-                </div>
-                <div className="lg:col-span-5 min-w-0">
-                  <BuyerDecisionBar
-                    report={workspace.evidenceReport}
-                    buyerDecision={workspace.buyerDecision}
-                    lang={lang}
-                    onSubmitDecision={handleBuyerDecision}
-                  />
-                </div>
-              </div>
+              {route === '/verification' && (
+                <VerificationPage
+                  reports={workspace.reports}
+                  activeReportId={activeReportId}
+                  tolerancePercent={workspace.tolerance_percent}
+                  onSelectReport={setActiveReportId}
+                  onReportUpdated={(rep) => {
+                    handleReportUpdated(rep);
+                    fetchWorkspace();
+                  }}
+                  onNavigate={navigate}
+                />
+              )}
+
+              {route === '/evidence' && (
+                <EvidencePage
+                  reports={workspace.reports}
+                  activeReportId={activeReportId}
+                  onSelectReport={setActiveReportId}
+                  onNavigate={navigate}
+                />
+              )}
+
+              {route === '/blockchain' && (
+                <BlockchainPage
+                  reports={workspace.reports}
+                  activeReportId={activeReportId}
+                  blockchainStatus={workspace.blockchain_status}
+                  blockchainRecords={workspace.blockchain_records}
+                  onSelectReport={setActiveReportId}
+                  onRecordCreated={(rep, rec) => {
+                    handleRecordCreated(rep, rec);
+                    fetchWorkspace();
+                  }}
+                />
+              )}
+
+              {route === '/settings' && (
+                <SettingsPage
+                  tolerancePercent={workspace.tolerance_percent}
+                  referenceDataset={workspace.reference_dataset}
+                  onToleranceSaved={handleToleranceSaved}
+                  onResetDemo={handleResetDemo}
+                />
+              )}
             </>
-          )}
-
-          {activeTab === 'evidence' && (
-            <EvidenceFujiView
-              report={workspace.evidenceReport}
-              fujiAnchor={workspace.fujiAnchor}
-              anchorHistory={workspace.anchorHistory}
-              lang={lang}
-              onAnchorFuji={handleAnchorFuji}
-            />
-          )}
-
-          {activeTab === 'seller' && (
-            <SellerGroundTruthView
-              sellerClaims={workspace.sellerClaims}
-              groundTruth={workspace.groundTruth}
-              lang={lang}
-              isVerifying={isVerifying}
-              onSubmitCustomClaims={handleRunVerification}
-            />
-          )}
+          ) : null}
         </main>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <StockProofAppShell />
+    </AuthProvider>
   );
 }

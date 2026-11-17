@@ -1,45 +1,70 @@
 import {
-  AlertCircle,
+  AlertTriangle,
   CheckCircle2,
-  FileQuestion,
+  Clock,
+  FileSearch,
   UserCheck,
+  XCircle,
 } from 'lucide-react';
-import type { VerificationStatus } from '../types/stockproof.ts';
+import type { ClaimReviewState, ReportRecord } from '../types/stockproof';
 
 interface StatusBadgeProps {
-  status: VerificationStatus;
+  status: ClaimReviewState | ReportRecord['status'] | string;
   compact?: boolean;
 }
 
+const VI_LABELS: Record<string, string> = {
+  VERIFIED: 'Đã xác minh',
+  ACCEPTED: 'Đã chấp nhận',
+  MISMATCH: 'Sai lệch',
+  PARTIAL_MISMATCH: 'Có sai lệch',
+  'REVISION REQUESTED': 'Yêu cầu chỉnh sửa',
+  'INSUFFICIENT EVIDENCE': 'Thiếu bằng chứng',
+  'NEEDS HUMAN REVIEW': 'Cần duyệt thủ công',
+  PENDING_REVIEW: 'Chờ duyệt HITL',
+  EXTRACTED: 'Đã trích xuất',
+  PENDING: 'Đang chờ',
+};
+
 export function StatusBadge({ status, compact = false }: StatusBadgeProps) {
-  switch (status) {
-    case 'Verified':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-emerald-700 font-medium whitespace-nowrap text-xs">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>{compact ? 'Verified' : 'Verified'}</span>
-        </span>
-      );
-    case 'Mismatch':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-red-700 font-medium whitespace-nowrap text-xs">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>Mismatch</span>
-        </span>
-      );
-    case 'Insufficient Evidence':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-amber-700 font-medium whitespace-nowrap text-xs">
-          <FileQuestion className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>Insufficient Evidence</span>
-        </span>
-      );
-    case 'Needs Human Review':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-indigo-700 font-medium whitespace-nowrap text-xs">
-          <UserCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>Needs Human Review</span>
-        </span>
-      );
+  const normalized = status.toUpperCase();
+  const displayLabel = VI_LABELS[normalized] || status;
+
+  let colorClass = 'text-[#94A3B8]';
+  let Icon = Clock;
+
+  if (normalized === 'VERIFIED' || normalized === 'ACCEPTED') {
+    colorClass = 'text-[#22C55E]';
+    Icon = CheckCircle2;
+  } else if (
+    normalized === 'MISMATCH' ||
+    normalized === 'PARTIAL_MISMATCH' ||
+    normalized === 'REVISION REQUESTED'
+  ) {
+    colorClass = 'text-[#EF4444]';
+    Icon = XCircle;
+  } else if (normalized === 'INSUFFICIENT EVIDENCE') {
+    colorClass = 'text-[#F59E0B]';
+    Icon = AlertTriangle;
+  } else if (
+    normalized === 'NEEDS HUMAN REVIEW' ||
+    normalized === 'PENDING_REVIEW'
+  ) {
+    colorClass = 'text-[#06B6D4]';
+    Icon = UserCheck;
+  } else if (normalized === 'EXTRACTED') {
+    colorClass = 'text-[#3B82F6]';
+    Icon = FileSearch;
   }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 font-medium tracking-tight whitespace-nowrap ${
+        compact ? 'text-xs' : 'text-[13px]'
+      } ${colorClass}`}
+    >
+      <Icon className={compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4 shrink-0'} />
+      <span>{displayLabel}</span>
+    </span>
+  );
 }

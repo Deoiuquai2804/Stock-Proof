@@ -1,103 +1,78 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import dotenv from 'dotenv';
+import { eq } from 'drizzle-orm';
 import express from 'express';
+import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import {
   CONTRACT_ADDRESS_FUJI,
-  ENTERPRISE_META,
-  FPT_GROUND_TRUTH,
-  getPresetClaims,
+  DEMO_COMPANY,
+  DEMO_INITIAL_ACTIVITIES,
+  DEMO_REFERENCE_DATASET,
+  DEMO_SELLER_CLAIMS,
+  createSeedReportSkeleton,
 } from './src/data/fptSeedData.ts';
-import { runVerificationEngine } from './src/lib/verification.ts';
+import { db, isSqlConfigured } from './src/db/index.ts';
+import { loadPostgresWorkspace, ensureCompany } from './src/db/repository.ts';
+import {
+  blockchainRecords,
+  claims as claimsTable,
+  evidences as evidencesTable,
+  humanReviews as humanReviewsTable,
+  reports as reportsTable,
+  verifications as verificationsTable,
+} from './src/db/schema.ts';
+import { getOrCreateUser } from './src/db/users.ts';
+import { processUploadedDocument } from './src/lib/documentProcessor.ts';
+import { extractFinancialClaims } from './src/lib/geminiExtractor.ts';
+import { generateEvidenceReportPdf } from './src/lib/pdfGenerator.ts';
+import {
+  buildEvidenceReport,
+  computeSha256Hex,
+  DEFAULT_TOLERANCE_PERCENT,
+} from './src/lib/verification.ts';
+import { adminAuth } from './src/lib/firebase-admin.ts';
+import { requireAuth, type AuthRequest } from './src/middleware/auth.ts';
 import type {
-  BuyerDecision,
-  FujiAnchorRecord,
-  HitlResolution,
-  ScenarioPresetId,
-  SellerClaim,
-  WorkspaceState,
+  ActivityEvent,
+  BlockchainNetworkStatus,
+  BlockchainRecord,
+  FinancialClaimInput,
+  HumanReviewRecord,
+  ReportRecord,
+  ReportType,
+  WorkspacePayload,
 } from './src/types/stockproof.ts';
 
+dotenv.config();
+
 const PORT = 3000;
-const FUJI_RPC_URL = 'https://api.avax-test.network/ext/bc/C/rpc';
+const FUJI_RPC_URL =
+  process.env.AVALANCHE_FUJI_RPC_URL ||
+  'https://api.avax-test.network/ext/bc/C/rpc';
 const FUJI_CHAIN_ID = 43113;
 const DB_DIR = path.resolve(process.cwd(), 'data');
-const DB_FILE = path.resolve(DB_DIR, 'stockproof-db.json');
+const DEMO_DB_FILE = path.resolve(DB_DIR, 'stockproof-demo.json');
 
-interface PersistedDatabase {
-  workspace: WorkspaceState;
-  hitlMap: Record<string, HitlResolution>;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
+
+interface DemoDatabase {
+  active_report_id: string;
+  tolerance_percent: number;
+  reports: ReportRecord[];
+  activities: ActivityEvent[];
+  blockchain_records: BlockchainRecord[];
 }
 
-async function createInitialDatabase(
-  scenarioId: ScenarioPresetId = 'faulty-demo',
-): Promise<PersistedDatabase> {
-  const sellerClaims = getPresetClaims(scenarioId);
-  const reportId = `RPT-FPT-${scenarioId === 'clean-revised' ? 'REV' : '2025'}-001`;
-  const evidenceReport = await runVerificationEngine({
-    reportId,
-    enterpriseName: ENTERPRISE_META.name,
-    ticker: ENTERPRISE_META.ticker,
-    exchange: ENTERPRISE_META.exchange,
-    statementType: ENTERPRISE_META.statementType,
-    reportingPeriod: ENTERPRISE_META.reportingPeriod,
-    sellerAgentId: 'seller-agent-fpt-ir-01',
-    buyerAgentId: 'buyer-agent-institutional-09',
-    sellerClaims,
-    groundTruth: FPT_GROUND_TRUTH,
-  });
-
-  return {
-    hitlMap: {},
-    workspace: {
-      scenarioId,
-      enterprise: ENTERPRISE_META,
-      sellerAgentId: 'seller-agent-fpt-ir-01',
-      buyerAgentId: 'buyer-agent-institutional-09',
-      sellerClaims,
-      groundTruth: FPT_GROUND_TRUTH,
-      evidenceReport,
-      fujiAnchor: null,
-      anchorHistory: [],
-      buyerDecision: {
-        decision: 'Pending',
-        buyerName: 'VietCap Institutional Desk',
-        note: '',
-        decidedAt: null,
-      },
-      lastUpdatedAt: new Date().toISOString(),
-    },
-  };
-}
-
-async function loadDatabase(): Promise<PersistedDatabase> {
-  try {
-    const raw = await fs.readFile(DB_FILE, 'utf-8');
-    const parsed = JSON.parse(raw) as PersistedDatabase;
-    if (parsed && parsed.workspace && Array.isArray(parsed.workspace.sellerClaims)) {
-      return parsed;
-    }
-  } catch {
-    // Initialize fresh seed DB if file doesn't exist yet
-  }
-  const initial = await createInitialDatabase('faulty-demo');
-  await saveDatabase(initial);
-  return initial;
-}
-
-async function saveDatabase(db: PersistedDatabase): Promise<void> {
-  await fs.mkdir(DB_DIR, { recursive: true });
-  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
-}
-
-async function fetchFujiBlockNumber(): Promise<{
-  blockNumber: number;
-  rpcVerified: boolean;
-}> {
+async function fetchFujiNetworkStatus(): Promise<BlockchainNetworkStatus> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
+    const timeout = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(FUJI_RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -110,307 +85,189 @@ async function fetchFujiBlockNumber(): Promise<{
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (!res.ok) throw new Error('RPC non-200');
-    const data = (await res.json()) as { result?: string };
-    if (data.result && data.result.startsWith('0x')) {
-      return {
-        blockNumber: Number.parseInt(data.result, 16),
-        rpcVerified: true,
-      };
+    if (res.ok) {
+      const json = (await res.json()) as { result?: string };
+      if (json.result && json.result.startsWith('0x')) {
+        return {
+          network: 'Avalanche Fuji Testnet',
+          chain_id: FUJI_CHAIN_ID,
+          connected: true,
+          rpc_url: FUJI_RPC_URL,
+          contract_address: CONTRACT_ADDRESS_FUJI,
+          block_number: Number.parseInt(json.result, 16),
+          explorer_base_url: 'https://testnet.snowtrace.io',
+          mode_label: 'RPC Connected (Sign with Wallet for Live Tx or Use Demo Mode)',
+        };
+      }
     }
   } catch {
-    // Fallback deterministic Fuji C-Chain reference block height when offline/sandboxed
+    // RPC unreachable in offline sandbox
   }
+
   return {
-    blockNumber: 38412950 + Math.floor((Date.now() / 2000) % 10000),
-    rpcVerified: false,
+    network: 'Avalanche Fuji Testnet',
+    chain_id: FUJI_CHAIN_ID,
+    connected: false,
+    rpc_url: FUJI_RPC_URL,
+    contract_address: CONTRACT_ADDRESS_FUJI,
+    block_number: null,
+    explorer_base_url: 'https://testnet.snowtrace.io',
+    mode_label: 'Not Connected (Demo Mode Available)',
+  };
+}
+
+async function createInitialDemoDatabase(): Promise<DemoDatabase> {
+  const skeleton = createSeedReportSkeleton();
+  const { results, evidenceReport } = await buildEvidenceReport({
+    report_id: skeleton.id,
+    company: skeleton.company_name,
+    ticker: skeleton.ticker,
+    exchange: skeleton.exchange,
+    reporting_period: skeleton.reporting_period,
+    report_type: skeleton.report_type,
+    document_hash: skeleton.document_hash,
+    tolerance_percent: DEFAULT_TOLERANCE_PERCENT,
+    claims: skeleton.extracted_claims,
+    reference_dataset: DEMO_REFERENCE_DATASET,
+    human_reviews: [],
+    blockchain_record: null,
+    is_demo_data: true,
+    timestamp: skeleton.created_at,
+  });
+
+  const seededReport: ReportRecord = {
+    ...skeleton,
+    status:
+      evidenceReport.summary.needs_human_review > 0
+        ? 'PENDING_REVIEW'
+        : evidenceReport.summary.mismatch > 0
+          ? 'MISMATCH'
+          : 'VERIFIED',
+    verification_results: results,
+    evidence_report: evidenceReport,
+  };
+
+  return {
+    active_report_id: seededReport.id,
+    tolerance_percent: DEFAULT_TOLERANCE_PERCENT,
+    reports: [seededReport],
+    activities: [...DEMO_INITIAL_ACTIVITIES],
+    blockchain_records: [],
+  };
+}
+
+async function loadDemoDatabase(): Promise<DemoDatabase> {
+  try {
+    const raw = await fs.readFile(DEMO_DB_FILE, 'utf-8');
+    const parsed = JSON.parse(raw) as DemoDatabase;
+    if (parsed && Array.isArray(parsed.reports) && parsed.reports.length > 0) {
+      return parsed;
+    }
+  } catch {
+    // Seed initial demo DB
+  }
+  const initial = await createInitialDemoDatabase();
+  await saveDemoDatabase(initial);
+  return initial;
+}
+
+async function saveDemoDatabase(data: DemoDatabase): Promise<void> {
+  await fs.mkdir(DB_DIR, { recursive: true });
+  await fs.writeFile(DEMO_DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+async function tryResolveUser(req: express.Request) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ') || !isSqlConfigured()) {
+    return null;
+  }
+  try {
+    const token = authHeader.split('Bearer ')[1];
+    const decoded = await adminAuth.verifyIdToken(token);
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+async function recomputeReport(
+  report: ReportRecord,
+  tolerancePercent: number,
+): Promise<ReportRecord> {
+  const { results, evidenceReport } = await buildEvidenceReport({
+    report_id: report.id,
+    company: report.company_name,
+    ticker: report.ticker,
+    exchange: report.exchange,
+    reporting_period: report.reporting_period,
+    report_type: report.report_type,
+    document_hash: report.document_hash,
+    tolerance_percent: tolerancePercent,
+    claims: report.extracted_claims,
+    reference_dataset: DEMO_REFERENCE_DATASET,
+    human_reviews: report.human_reviews,
+    blockchain_record: report.blockchain_record,
+    is_demo_data: report.is_demo_data,
+  });
+
+  const nextStatus: ReportRecord['status'] =
+    evidenceReport.summary.needs_human_review > 0
+      ? 'PENDING_REVIEW'
+      : evidenceReport.summary.mismatch > 0 ||
+          evidenceReport.summary.insufficient_evidence > 0
+        ? 'MISMATCH'
+        : 'VERIFIED';
+
+  return {
+    ...report,
+    status: nextStatus,
+    verification_results: results,
+    evidence_report: evidenceReport,
   };
 }
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '4mb' }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, service: 'stockproof-api' });
+    res.json({ ok: true, service: 'stockproof-mvp-api' });
+  });
+
+  app.post('/api/auth/session', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user?.uid) {
+        res.status(401).json({ error: 'Invalid user identity' });
+        return;
+      }
+      if (!isSqlConfigured()) {
+        res.json({
+          uid: req.user.uid,
+          email: req.user.email ?? '',
+          name: req.user.name ?? 'Auditor',
+          persistence_mode: 'LOCAL_DEMO_PERSISTENCE',
+        });
+        return;
+      }
+      const user = await getOrCreateUser(
+        req.user.uid,
+        req.user.email ?? '',
+        req.user.name,
+      );
+      res.json({
+        ...user,
+        persistence_mode: 'POSTGRES_CLOUDSQL',
+      });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : 'Session sync failed',
+      });
+    }
   });
 
   app.get('/api/fuji-status', async (_req, res) => {
-    const rpc = await fetchFujiBlockNumber();
-    res.json({
-      networkName: 'Avalanche Fuji C-Chain Testnet',
-      chainId: FUJI_CHAIN_ID,
-      rpcUrl: FUJI_RPC_URL,
-      contractAddress: CONTRACT_ADDRESS_FUJI,
-      blockNumber: rpc.blockNumber,
-      rpcVerified: rpc.rpcVerified,
-      explorerBaseUrl: 'https://testnet.snowtrace.io',
-    });
-  });
-
-  app.get('/api/workspace', async (_req, res) => {
-    const db = await loadDatabase();
-    res.json(db.workspace);
-  });
-
-  app.post('/api/verify', async (req, res) => {
-    try {
-      const db = await loadDatabase();
-      const body = req.body as {
-        claims?: SellerClaim[];
-        scenarioId?: ScenarioPresetId;
-        clearHitl?: boolean;
-      };
-
-      const nextClaims = Array.isArray(body?.claims)
-        ? body.claims
-        : db.workspace.sellerClaims;
-      if (body?.clearHitl) {
-        db.hitlMap = {};
-      }
-      if (body?.scenarioId) {
-        db.workspace.scenarioId = body.scenarioId;
-      }
-
-      const reportId = `RPT-FPT-${Date.now().toString(36).toUpperCase()}`;
-      const evidenceReport = await runVerificationEngine({
-        reportId,
-        enterpriseName: db.workspace.enterprise.name,
-        ticker: db.workspace.enterprise.ticker,
-        exchange: db.workspace.enterprise.exchange,
-        statementType: db.workspace.enterprise.statementType,
-        reportingPeriod: db.workspace.enterprise.reportingPeriod,
-        sellerAgentId: db.workspace.sellerAgentId,
-        buyerAgentId: db.workspace.buyerAgentId,
-        sellerClaims: nextClaims,
-        groundTruth: db.workspace.groundTruth,
-        hitlMap: db.hitlMap,
-      });
-
-      db.workspace.sellerClaims = nextClaims;
-      db.workspace.evidenceReport = evidenceReport;
-      db.workspace.fujiAnchor = null;
-      db.workspace.buyerDecision = {
-        ...db.workspace.buyerDecision,
-        decision: 'Pending',
-        note: '',
-        decidedAt: null,
-      };
-      db.workspace.lastUpdatedAt = new Date().toISOString();
-
-      await saveDatabase(db);
-      res.json(db.workspace);
-    } catch (err) {
-      res.status(400).json({
-        error: err instanceof Error ? err.message : 'Verification failed',
-      });
-    }
-  });
-
-  app.post('/api/claims/:claimId/hitl', async (req, res) => {
-    try {
-      const { claimId } = req.params;
-      const body = req.body as {
-        decision?: 'Verified' | 'Mismatch';
-        reviewerName?: string;
-        reviewerRole?: string;
-        note?: string;
-      };
-
-      if (body.decision !== 'Verified' && body.decision !== 'Mismatch') {
-        res.status(400).json({ error: 'Decision must be Verified or Mismatch.' });
-        return;
-      }
-      if (!body.reviewerName?.trim() || !body.note?.trim()) {
-        res
-          .status(400)
-          .json({ error: 'Reviewer name and audit rationale are required.' });
-        return;
-      }
-
-      const db = await loadDatabase();
-      const targetExists = db.workspace.sellerClaims.some(
-        (c) => c.claimId === claimId,
-      );
-      if (!targetExists) {
-        res.status(404).json({ error: `Claim ${claimId} not found.` });
-        return;
-      }
-
-      db.hitlMap[claimId] = {
-        claimId,
-        decision: body.decision,
-        reviewerName: body.reviewerName.trim(),
-        reviewerRole: body.reviewerRole?.trim() || 'Senior Financial Auditor',
-        note: body.note.trim(),
-        resolvedAt: new Date().toISOString(),
-      };
-
-      const evidenceReport = await runVerificationEngine({
-        reportId:
-          db.workspace.evidenceReport?.reportId ??
-          `RPT-FPT-${Date.now().toString(36).toUpperCase()}`,
-        enterpriseName: db.workspace.enterprise.name,
-        ticker: db.workspace.enterprise.ticker,
-        exchange: db.workspace.enterprise.exchange,
-        statementType: db.workspace.enterprise.statementType,
-        reportingPeriod: db.workspace.enterprise.reportingPeriod,
-        sellerAgentId: db.workspace.sellerAgentId,
-        buyerAgentId: db.workspace.buyerAgentId,
-        sellerClaims: db.workspace.sellerClaims,
-        groundTruth: db.workspace.groundTruth,
-        hitlMap: db.hitlMap,
-      });
-
-      db.workspace.evidenceReport = evidenceReport;
-      // Clear anchor if hash changed after HITL resolution
-      db.workspace.fujiAnchor = null;
-      db.workspace.lastUpdatedAt = new Date().toISOString();
-
-      await saveDatabase(db);
-      res.json(db.workspace);
-    } catch (err) {
-      res.status(400).json({
-        error: err instanceof Error ? err.message : 'Failed to record HITL decision',
-      });
-    }
-  });
-
-  app.post('/api/anchor-fuji', async (req, res) => {
-    try {
-      const db = await loadDatabase();
-      const report = db.workspace.evidenceReport;
-      if (!report) {
-        res.status(400).json({
-          error: 'Generate an Evidence Report before anchoring to Avalanche Fuji.',
-        });
-        return;
-      }
-
-      const body = req.body as {
-        txHash?: string;
-        contractAddress?: string;
-      };
-      const rpc = await fetchFujiBlockNumber();
-      const suppliedTx = body?.txHash?.trim();
-      const txHash =
-        suppliedTx && /^0x[0-9a-fA-F]{64}$/.test(suppliedTx)
-          ? suppliedTx
-          : '0x' +
-            crypto
-              .createHash('sha256')
-              .update(
-                `${report.reportHash}:${rpc.blockNumber}:${Date.now()}`,
-              )
-              .digest('hex');
-
-      const anchorRecord: FujiAnchorRecord = {
-        anchorId: `FUJI-${Date.now().toString(36).toUpperCase()}`,
-        reportId: report.reportId,
-        reportHash: report.reportHash,
-        contractAddress: body?.contractAddress?.trim() || CONTRACT_ADDRESS_FUJI,
-        chainId: FUJI_CHAIN_ID,
-        networkName: 'Avalanche Fuji C-Chain',
-        blockNumber: rpc.blockNumber,
-        txHash,
-        explorerUrl: `https://testnet.snowtrace.io/tx/${txHash}`,
-        overallVerdict: report.summary.overallVerdict,
-        verifiedCount: report.summary.verifiedCount,
-        totalClaims: report.summary.totalClaims,
-        anchoredAt: new Date().toISOString(),
-        anchorMode: suppliedTx ? 'wallet-live' : 'fuji-rpc-recorded',
-        rpcVerified: rpc.rpcVerified,
-      };
-
-      db.workspace.fujiAnchor = anchorRecord;
-      db.workspace.anchorHistory = [
-        anchorRecord,
-        ...db.workspace.anchorHistory.slice(0, 9),
-      ];
-      db.workspace.lastUpdatedAt = new Date().toISOString();
-
-      await saveDatabase(db);
-      res.json(db.workspace);
-    } catch (err) {
-      res.status(500).json({
-        error: err instanceof Error ? err.message : 'Fuji anchoring failed',
-      });
-    }
-  });
-
-  app.post('/api/buyer-decision', async (req, res) => {
-    try {
-      const db = await loadDatabase();
-      const body = req.body as {
-        decision?: BuyerDecision['decision'];
-        buyerName?: string;
-        note?: string;
-      };
-
-      if (
-        body.decision !== 'Accepted' &&
-        body.decision !== 'Revision Requested'
-      ) {
-        res.status(400).json({
-          error: 'Buyer decision must be Accepted or Revision Requested.',
-        });
-        return;
-      }
-
-      const report = db.workspace.evidenceReport;
-      if (!report) {
-        res.status(400).json({ error: 'No Evidence Report found.' });
-        return;
-      }
-
-      if (body.decision === 'Accepted') {
-        if (report.summary.needsHumanReviewCount > 0) {
-          res.status(400).json({
-            error:
-              'Cannot accept report while claims require Human-in-the-Loop review.',
-          });
-          return;
-        }
-        if (
-          report.summary.mismatchCount > 0 ||
-          report.summary.insufficientEvidenceCount > 0
-        ) {
-          res.status(400).json({
-            error:
-              'Cannot accept report with unresolved mismatches or insufficient evidence.',
-          });
-          return;
-        }
-      }
-
-      db.workspace.buyerDecision = {
-        decision: body.decision,
-        buyerName: body.buyerName?.trim() || 'VietCap Institutional Desk',
-        note:
-          body.note?.trim() ||
-          (body.decision === 'Accepted'
-            ? 'All 10 claims verified and anchored.'
-            : 'Seller requested to fix flagged discrepancies.'),
-        decidedAt: new Date().toISOString(),
-      };
-      db.workspace.lastUpdatedAt = new Date().toISOString();
-
-      await saveDatabase(db);
-      res.json(db.workspace);
-    } catch (err) {
-      res.status(400).json({
-        error: err instanceof Error ? err.message : 'Buyer decision failed',
-      });
-    }
-  });
-
-  app.post('/api/reset', async (req, res) => {
-    const body = req.body as { scenarioId?: ScenarioPresetId };
-    const scenarioId: ScenarioPresetId =
-      body?.scenarioId === 'clean-revised' ? 'clean-revised' : 'faulty-demo';
-    const nextDb = await createInitialDatabase(scenarioId);
-    await saveDatabase(nextDb);
-    res.json(nextDb.workspace);
+    const status = await fetchFujiNetworkStatus();
+    res.json(status);
   });
 
   app.get('/api/contract-source', async (_req, res) => {
@@ -421,14 +278,778 @@ async function startServer() {
       );
       const source = await fs.readFile(solPath, 'utf-8');
       res.json({
-        contractName: 'StockProofRegistry',
-        contractAddress: CONTRACT_ADDRESS_FUJI,
-        chainId: FUJI_CHAIN_ID,
+        contract_name: 'StockProofRegistry',
+        contract_address: CONTRACT_ADDRESS_FUJI,
+        chain_id: FUJI_CHAIN_ID,
         source,
       });
     } catch {
       res.status(404).json({ error: 'Contract source not found' });
     }
+  });
+
+  app.get('/api/sample-report', (req, res) => {
+    const format = String(req.query.format || 'csv').toLowerCase();
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="FPT_FY2025_Sample_Claims.json"',
+      );
+      res.send(
+        JSON.stringify(
+          {
+            company: DEMO_COMPANY.name,
+            period: 'FY2025',
+            report_type: 'Consolidated',
+            claims: DEMO_SELLER_CLAIMS,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    const headers = [
+      'claim_id',
+      'claim_type',
+      'metric',
+      'company',
+      'period',
+      'report_type',
+      'reported_value',
+      'currency',
+      'unit',
+      'formula',
+      'source_page',
+      'source_location',
+      'evidence',
+    ];
+    const escapeCsv = (val: unknown) => {
+      const str = val === null || val === undefined ? '' : String(val);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+    const rows = DEMO_SELLER_CLAIMS.map((c) =>
+      [
+        c.claim_id,
+        c.claim_type,
+        c.metric,
+        c.company,
+        c.period,
+        c.report_type,
+        c.reported_value ?? '',
+        c.currency,
+        c.unit,
+        c.formula ?? '',
+        c.source_page ?? '',
+        c.source_location,
+        c.evidence,
+      ]
+        .map(escapeCsv)
+        .join(','),
+    );
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="FPT_FY2025_Sample_Claims.csv"',
+    );
+    res.send(csvContent);
+  });
+
+  app.get('/api/workspace', async (req, res) => {
+    try {
+      const bcStatus = await fetchFujiNetworkStatus();
+      const user = await tryResolveUser(req);
+
+      if (user && user.email) {
+        const pgWorkspace = await loadPostgresWorkspace({
+          uid: user.uid,
+          email: user.email,
+          name: user.name,
+          tolerancePercent: DEFAULT_TOLERANCE_PERCENT,
+          blockchainStatus: bcStatus,
+        });
+        res.json(pgWorkspace);
+        return;
+      }
+
+      const demo = await loadDemoDatabase();
+      const payload: WorkspacePayload = {
+        active_report_id: demo.active_report_id,
+        tolerance_percent: demo.tolerance_percent,
+        reports: demo.reports,
+        reference_dataset: DEMO_REFERENCE_DATASET,
+        activities: demo.activities,
+        blockchain_records: demo.blockchain_records,
+        blockchain_status: bcStatus,
+        persistence_mode: 'LOCAL_DEMO_PERSISTENCE',
+      };
+      res.json(payload);
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : 'Failed to load workspace',
+      });
+    }
+  });
+
+  app.post('/api/settings/tolerance', async (req, res) => {
+    const { tolerance_percent } = req.body as { tolerance_percent?: number };
+    const val = Number(tolerance_percent);
+    if (!Number.isFinite(val) || val < 0 || val > 25) {
+      res.status(400).json({ error: 'Tolerance must be between 0% and 25%.' });
+      return;
+    }
+
+    const demo = await loadDemoDatabase();
+    demo.tolerance_percent = val;
+    demo.reports = await Promise.all(
+      demo.reports.map((r) => recomputeReport(r, val)),
+    );
+    demo.activities.unshift({
+      id: `ACT-${Date.now()}`,
+      report_id: demo.active_report_id,
+      title: 'Verification Tolerance Updated',
+      description: `Numerical tolerance set to +/-${val}% and reports re-verified.`,
+      status: 'info',
+      timestamp: new Date().toISOString(),
+    });
+    await saveDemoDatabase(demo);
+    res.json({ tolerance_percent: val });
+  });
+
+  app.post('/api/reports/upload', upload.single('file'), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: 'Please select a PDF, Excel, CSV, or JSON report file.' });
+        return;
+      }
+
+      const body = req.body as {
+        company_name?: string;
+        ticker?: string;
+        reporting_period?: string;
+        report_type?: ReportType;
+        fiscal_year?: string;
+        currency?: string;
+        unit?: string;
+      };
+
+      const companyName = body.company_name?.trim() || DEMO_COMPANY.name;
+      const ticker = (body.ticker?.trim() || 'FPT').toUpperCase();
+      const reportingPeriod = body.reporting_period?.trim() || 'FY2025';
+      const reportType: ReportType =
+        body.report_type === 'Separate' ? 'Separate' : 'Consolidated';
+      const fiscalYear = body.fiscal_year?.trim() || '2025';
+      const currency = body.currency?.trim() || 'VND';
+      const unit = body.unit?.trim() || 'Billion VND';
+
+      const processed = await processUploadedDocument({
+        buffer: file.buffer,
+        originalFilename: file.originalname,
+        mimeType: file.mimetype,
+      });
+
+      const extraction = await extractFinancialClaims({
+        extractedText: processed.extractedText,
+        structuredRows: processed.structuredJsonClaims,
+        companyName,
+        period: reportingPeriod,
+        reportType,
+        currency,
+        unit,
+        sourceDocument: processed.originalFilename,
+      });
+
+      const reportId = `RPT-${ticker}-${Date.now().toString(36).toUpperCase()}`;
+      const newReportBase: ReportRecord = {
+        id: reportId,
+        company_name: companyName,
+        ticker,
+        exchange: 'HOSE',
+        original_filename: processed.originalFilename,
+        file_size: processed.fileSize,
+        file_type: processed.fileType,
+        document_hash: processed.documentHash,
+        reporting_period: reportingPeriod,
+        report_type: reportType,
+        fiscal_year: fiscalYear,
+        currency,
+        unit,
+        storage_path: processed.storagePath,
+        status: 'EXTRACTED',
+        buyer_decision: 'Pending',
+        buyer_note: '',
+        is_demo_data: false,
+        created_at: new Date().toISOString(),
+        extracted_claims: extraction.claims,
+        verification_results: [],
+        evidence_report: null,
+        blockchain_record: null,
+        human_reviews: [],
+      };
+
+      const demo = await loadDemoDatabase();
+      const verifiedReport = await recomputeReport(
+        newReportBase,
+        demo.tolerance_percent,
+      );
+
+      // Persist to Cloud SQL if authenticated
+      const authUser = await tryResolveUser(req);
+      if (authUser && authUser.email) {
+        const dbUser = await getOrCreateUser(
+          authUser.uid,
+          authUser.email,
+          authUser.name,
+        );
+        const comp = await ensureCompany(companyName, ticker, 'HOSE');
+        const [insertedReport] = await db
+          .insert(reportsTable)
+          .values({
+            reportCode: verifiedReport.id,
+            userId: dbUser.id,
+            companyId: comp.id,
+            originalFilename: verifiedReport.original_filename,
+            documentHash: verifiedReport.document_hash,
+            reportingPeriod: verifiedReport.reporting_period,
+            reportType: verifiedReport.report_type,
+            fiscalYear: verifiedReport.fiscal_year,
+            currency: verifiedReport.currency,
+            unit: verifiedReport.unit,
+            storagePath: verifiedReport.storage_path,
+            status: verifiedReport.status,
+            buyerDecision: 'Pending',
+            buyerNote: '',
+          })
+          .returning();
+
+        for (let i = 0; i < verifiedReport.extracted_claims.length; i++) {
+          const c = verifiedReport.extracted_claims[i];
+          const v = verifiedReport.verification_results[i];
+          const [insertedClaim] = await db
+            .insert(claimsTable)
+            .values({
+              reportId: insertedReport.id,
+              claimCode: c.claim_id,
+              claimType: c.claim_type,
+              metric: c.metric,
+              reportedValue: c.reported_value,
+              referenceValue: v.reference_value,
+              period: c.period,
+              reportType: c.report_type,
+              currency: c.currency,
+              unit: c.unit,
+              formula: c.formula,
+              sourcePage: c.source_page,
+              sourceLocation: c.source_location,
+              evidence: c.evidence,
+              verificationStatus: v.status,
+            })
+            .returning();
+
+          const evHash = await computeSha256Hex(
+            `${c.source_document}:${c.source_page ?? ''}:${c.evidence}`,
+          );
+          await db.insert(evidencesTable).values({
+            claimId: insertedClaim.id,
+            sourceName: c.source_document,
+            sourcePage: c.source_page,
+            sourceLocation: c.source_location,
+            evidenceHash: evHash,
+          });
+          await db.insert(verificationsTable).values({
+            reportId: insertedReport.id,
+            claimId: insertedClaim.id,
+            result: v.status,
+            explanation: v.explanation,
+            difference: v.difference_label,
+            validationRule: v.validation_rule,
+          });
+        }
+      } else {
+        demo.reports = [verifiedReport, ...demo.reports];
+        demo.active_report_id = verifiedReport.id;
+        demo.activities.unshift({
+          id: `ACT-${Date.now()}`,
+          report_id: verifiedReport.id,
+          title: `Uploaded & Analyzed ${processed.originalFilename}`,
+          description: `${extraction.claims.length} claims extracted (${extraction.extractor}) and verified.`,
+          status:
+            verifiedReport.status === 'VERIFIED' ? 'verified' : 'warning',
+          timestamp: new Date().toISOString(),
+        });
+        await saveDemoDatabase(demo);
+      }
+
+      res.json({
+        report: verifiedReport,
+        extractor: extraction.extractor,
+        page_count: processed.pageCount,
+      });
+    } catch (err) {
+      res.status(400).json({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Document extraction failed.',
+      });
+    }
+  });
+
+  app.post('/api/reports/:reportId/claims', async (req, res) => {
+    try {
+      const { reportId } = req.params;
+      const { claims } = req.body as { claims?: FinancialClaimInput[] };
+      if (!Array.isArray(claims)) {
+        res.status(400).json({ error: 'Claims array is required.' });
+        return;
+      }
+
+      const authUser = await tryResolveUser(req);
+      if (authUser && authUser.email) {
+        const repRows = await db
+          .select()
+          .from(reportsTable)
+          .where(eq(reportsTable.reportCode, reportId));
+        if (repRows.length === 0) {
+          res.status(404).json({ error: 'Report not found.' });
+          return;
+        }
+        const repRow = repRows[0];
+        const existingClaims = await db
+          .select()
+          .from(claimsTable)
+          .where(eq(claimsTable.reportId, repRow.id));
+
+        const { results, evidenceReport } = await buildEvidenceReport({
+          report_id: repRow.reportCode,
+          company: claims[0]?.company || DEMO_COMPANY.name,
+          ticker: 'FPT',
+          exchange: 'HOSE',
+          reporting_period: repRow.reportingPeriod,
+          report_type: (repRow.reportType as ReportType) || 'Consolidated',
+          document_hash: repRow.documentHash,
+          tolerance_percent: DEFAULT_TOLERANCE_PERCENT,
+          claims,
+          reference_dataset: DEMO_REFERENCE_DATASET,
+          is_demo_data: repRow.reportCode.startsWith('RPT-DEMO-'),
+        });
+
+        for (let i = 0; i < claims.length; i++) {
+          const updatedClaim = claims[i];
+          const verifiedItem = results[i];
+          const match = existingClaims.find(
+            (ec) => ec.claimCode === updatedClaim.claim_id,
+          );
+          if (match) {
+            await db
+              .update(claimsTable)
+              .set({
+                reportedValue: updatedClaim.reported_value,
+                referenceValue: verifiedItem.reference_value,
+                period: updatedClaim.period,
+                unit: updatedClaim.unit,
+                sourcePage: updatedClaim.source_page,
+                sourceLocation: updatedClaim.source_location,
+                evidence: updatedClaim.evidence,
+                verificationStatus: verifiedItem.status,
+              })
+              .where(eq(claimsTable.id, match.id));
+            await db
+              .update(verificationsTable)
+              .set({
+                result: verifiedItem.status,
+                explanation: verifiedItem.explanation,
+                difference: verifiedItem.difference_label,
+                validationRule: verifiedItem.validation_rule,
+              })
+              .where(eq(verificationsTable.claimId, match.id));
+          }
+        }
+
+        const nextReportStatus: ReportRecord['status'] =
+          evidenceReport.summary.needs_human_review > 0
+            ? 'PENDING_REVIEW'
+            : evidenceReport.summary.mismatch > 0 ||
+                evidenceReport.summary.insufficient_evidence > 0
+              ? 'MISMATCH'
+              : 'VERIFIED';
+
+        await db
+          .update(reportsTable)
+          .set({ status: nextReportStatus })
+          .where(eq(reportsTable.id, repRow.id));
+
+        const pgWorkspace = await loadPostgresWorkspace({
+          uid: authUser.uid,
+          email: authUser.email,
+          name: authUser.name,
+          tolerancePercent: DEFAULT_TOLERANCE_PERCENT,
+          blockchainStatus: await fetchFujiNetworkStatus(),
+        });
+        const updatedReport = pgWorkspace.reports.find((r) => r.id === reportId);
+        res.json({ ok: true, report: updatedReport });
+        return;
+      }
+
+      const demo = await loadDemoDatabase();
+      const idx = demo.reports.findIndex((r) => r.id === reportId);
+      if (idx === -1) {
+        res.status(404).json({ error: 'Report not found.' });
+        return;
+      }
+
+      const updated = await recomputeReport(
+        {
+          ...demo.reports[idx],
+          extracted_claims: claims,
+          blockchain_record: null,
+        },
+        demo.tolerance_percent,
+      );
+      demo.reports[idx] = updated;
+      demo.activities.unshift({
+        id: `ACT-${Date.now()}`,
+        report_id: reportId,
+        title: `Claims Edited & Re-Verified (${reportId})`,
+        description: `Updated ${claims.length} claims and ran deterministic verification rules.`,
+        status: updated.status === 'VERIFIED' ? 'verified' : 'warning',
+        timestamp: new Date().toISOString(),
+      });
+      await saveDemoDatabase(demo);
+      res.json({ report: updated });
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : 'Failed to update claims',
+      });
+    }
+  });
+
+  app.post('/api/reports/:reportId/claims/:claimId/review', async (req, res) => {
+    try {
+      const { reportId, claimId } = req.params;
+      const body = req.body as {
+        reviewer_id?: string;
+        reviewer_name?: string;
+        decision?: HumanReviewRecord['decision'];
+        comment?: string;
+        updated_value?: number | null;
+      };
+
+      if (
+        body.decision !== 'VERIFIED' &&
+        body.decision !== 'MISMATCH' &&
+        body.decision !== 'INSUFFICIENT EVIDENCE'
+      ) {
+        res.status(400).json({ error: 'Invalid human review decision.' });
+        return;
+      }
+      if (!body.reviewer_name?.trim() || !body.comment?.trim()) {
+        res.status(400).json({
+          error: 'Reviewer name and review comments are required.',
+        });
+        return;
+      }
+
+      const authUser = await tryResolveUser(req);
+      if (authUser && authUser.email) {
+        const repRows = await db
+          .select()
+          .from(reportsTable)
+          .where(eq(reportsTable.reportCode, reportId));
+        if (repRows.length === 0) {
+          res.status(404).json({ error: 'Report not found.' });
+          return;
+        }
+        const repClaims = await db
+          .select()
+          .from(claimsTable)
+          .where(eq(claimsTable.reportId, repRows[0].id));
+        const target = repClaims.find((c) => c.claimCode === claimId);
+        if (!target) {
+          res.status(404).json({ error: 'Claim not found.' });
+          return;
+        }
+        const prevVal = target.reportedValue;
+        const nextVal =
+          body.updated_value !== undefined ? body.updated_value : prevVal;
+
+        await db.insert(humanReviewsTable).values({
+          claimId: target.id,
+          reviewerId: body.reviewer_id?.trim() || authUser.uid,
+          reviewerName: body.reviewer_name.trim(),
+          decision: body.decision,
+          comment: body.comment.trim(),
+          previousValue: prevVal,
+          updatedValue: nextVal,
+        });
+
+        await db
+          .update(claimsTable)
+          .set({
+            reportedValue: nextVal,
+            verificationStatus: body.decision,
+          })
+          .where(eq(claimsTable.id, target.id));
+
+        const pgWorkspace = await loadPostgresWorkspace({
+          uid: authUser.uid,
+          email: authUser.email,
+          name: authUser.name,
+          tolerancePercent: DEFAULT_TOLERANCE_PERCENT,
+          blockchainStatus: await fetchFujiNetworkStatus(),
+        });
+        const updatedReport = pgWorkspace.reports.find((r) => r.id === reportId);
+        if (updatedReport?.evidence_report) {
+          const s = updatedReport.evidence_report.summary;
+          const nextReportStatus: ReportRecord['status'] =
+            s.needs_human_review > 0
+              ? 'PENDING_REVIEW'
+              : s.mismatch > 0 || s.insufficient_evidence > 0
+                ? 'MISMATCH'
+                : 'VERIFIED';
+          await db
+            .update(reportsTable)
+            .set({ status: nextReportStatus })
+            .where(eq(reportsTable.id, repRows[0].id));
+        }
+
+        res.json({ ok: true, report: updatedReport });
+        return;
+      }
+
+      const demo = await loadDemoDatabase();
+      const idx = demo.reports.findIndex((r) => r.id === reportId);
+      if (idx === -1) {
+        res.status(404).json({ error: 'Report not found.' });
+        return;
+      }
+      const report = demo.reports[idx];
+      const claimIdx = report.extracted_claims.findIndex(
+        (c) => c.claim_id === claimId,
+      );
+      if (claimIdx === -1) {
+        res.status(404).json({ error: 'Claim not found.' });
+        return;
+      }
+
+      const previousValue = report.extracted_claims[claimIdx].reported_value;
+      const updatedValue =
+        body.updated_value !== undefined ? body.updated_value : previousValue;
+
+      if (body.updated_value !== undefined) {
+        report.extracted_claims[claimIdx].reported_value = body.updated_value;
+      }
+
+      const reviewRecord: HumanReviewRecord = {
+        id: `REV-${Date.now().toString(36).toUpperCase()}`,
+        claim_id: claimId,
+        reviewer_id: body.reviewer_id?.trim() || 'auditor-demo-01',
+        reviewer_name: body.reviewer_name.trim(),
+        decision: body.decision,
+        comment: body.comment.trim(),
+        previous_value: previousValue,
+        updated_value: updatedValue,
+        created_at: new Date().toISOString(),
+      };
+
+      const filteredReviews = report.human_reviews.filter(
+        (hr) => hr.claim_id !== claimId,
+      );
+      report.human_reviews = [reviewRecord, ...filteredReviews];
+      report.blockchain_record = null;
+
+      const updatedReport = await recomputeReport(report, demo.tolerance_percent);
+      demo.reports[idx] = updatedReport;
+      demo.activities.unshift({
+        id: `ACT-${Date.now()}`,
+        report_id: reportId,
+        title: `HITL Review Recorded on ${claimId}`,
+        description: `${body.decision} by ${reviewRecord.reviewer_name}: ${reviewRecord.comment}`,
+        status: body.decision === 'VERIFIED' ? 'verified' : 'error',
+        timestamp: new Date().toISOString(),
+      });
+      await saveDemoDatabase(demo);
+      res.json({ report: updatedReport });
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : 'Failed to save HITL review',
+      });
+    }
+  });
+
+  app.post('/api/reports/:reportId/blockchain', async (req, res) => {
+    try {
+      const { reportId } = req.params;
+      const body = req.body as {
+        tx_hash?: string;
+        contract_address?: string;
+        mode?: 'LIVE_FUJI_WALLET' | 'DEMO_SIMULATION';
+      };
+
+      const bcStatus = await fetchFujiNetworkStatus();
+      const suppliedTx = body.tx_hash?.trim();
+      const isLiveWalletTx =
+        body.mode === 'LIVE_FUJI_WALLET' &&
+        Boolean(suppliedTx && /^0x[0-9a-fA-F]{64}$/.test(suppliedTx));
+
+      const authUser = await tryResolveUser(req);
+      if (authUser) {
+        const repRows = await db
+          .select()
+          .from(reportsTable)
+          .where(eq(reportsTable.reportCode, reportId));
+        if (repRows.length === 0) {
+          res.status(404).json({ error: 'Report not found.' });
+          return;
+        }
+        const repRow = repRows[0];
+        const evidenceHash = await computeSha256Hex(
+          `${repRow.reportCode}:${repRow.documentHash}:${Date.now()}`,
+        );
+        const txHash = isLiveWalletTx
+          ? (suppliedTx as string)
+          : `DEMO-SIM-${crypto
+              .createHash('sha256')
+              .update(`${repRow.documentHash}:${evidenceHash}`)
+              .digest('hex')
+              .slice(0, 40)}`;
+
+        await db.insert(blockchainRecords).values({
+          reportId: repRow.id,
+          reportHash: repRow.documentHash,
+          evidenceHash,
+          transactionHash: txHash,
+          contractAddress:
+            body.contract_address?.trim() || CONTRACT_ADDRESS_FUJI,
+          network: 'Avalanche Fuji Testnet',
+          verificationStatus: repRow.status,
+          blockNumber: isLiveWalletTx ? bcStatus.block_number ?? 1 : 0,
+        });
+
+        res.json({ ok: true, tx_hash: txHash });
+        return;
+      }
+
+      const demo = await loadDemoDatabase();
+      const idx = demo.reports.findIndex((r) => r.id === reportId);
+      if (idx === -1) {
+        res.status(404).json({ error: 'Report not found.' });
+        return;
+      }
+
+      const report = demo.reports[idx];
+      if (!report.evidence_report) {
+        res.status(400).json({ error: 'Generate Evidence Report first.' });
+        return;
+      }
+
+      const txHash = isLiveWalletTx
+        ? (suppliedTx as string)
+        : `DEMO-SIM-${crypto
+            .createHash('sha256')
+            .update(
+              `${report.document_hash}:${report.evidence_report.evidence_hash}:${Date.now()}`,
+            )
+            .digest('hex')
+            .slice(0, 48)}`;
+
+      const record: BlockchainRecord = {
+        id: `BC-${Date.now().toString(36).toUpperCase()}`,
+        report_id: report.id,
+        report_hash: report.document_hash,
+        evidence_hash: report.evidence_report.evidence_hash,
+        verification_status: report.evidence_report.summary.overall_status,
+        version: 1,
+        transaction_hash: txHash,
+        contract_address:
+          body.contract_address?.trim() || CONTRACT_ADDRESS_FUJI,
+        network: 'Avalanche Fuji Testnet',
+        chain_id: FUJI_CHAIN_ID,
+        block_number: isLiveWalletTx ? bcStatus.block_number ?? 0 : 0,
+        explorer_url: isLiveWalletTx
+          ? `https://testnet.snowtrace.io/tx/${txHash}`
+          : null,
+        mode: isLiveWalletTx ? 'LIVE_FUJI_WALLET' : 'DEMO_SIMULATION',
+        created_at: new Date().toISOString(),
+      };
+
+      report.blockchain_record = record;
+      if (report.evidence_report) {
+        report.evidence_report.blockchain_record = record;
+      }
+      demo.reports[idx] = report;
+      demo.blockchain_records = [record, ...demo.blockchain_records.slice(0, 19)];
+      demo.activities.unshift({
+        id: `ACT-${Date.now()}`,
+        report_id: report.id,
+        title: isLiveWalletTx
+          ? `Registered on Avalanche Fuji (${report.id})`
+          : `Recorded Demo Blockchain Entry (${report.id})`,
+        description: `Report & Evidence hashes recorded (${record.mode}).`,
+        status: 'verified',
+        timestamp: new Date().toISOString(),
+      });
+      await saveDemoDatabase(demo);
+
+      res.json({ report, blockchain_record: record });
+    } catch (err) {
+      res.status(500).json({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to record blockchain entry',
+      });
+    }
+  });
+
+  app.get('/api/reports/:reportId/evidence.pdf', async (req, res) => {
+    try {
+      const { reportId } = req.params;
+      const demo = await loadDemoDatabase();
+      let target = demo.reports.find((r) => r.id === reportId);
+
+      if (!target) {
+        const authUser = await tryResolveUser(req);
+        if (authUser && authUser.email) {
+          const pgWorkspace = await loadPostgresWorkspace({
+            uid: authUser.uid,
+            email: authUser.email,
+            name: authUser.name,
+            tolerancePercent: DEFAULT_TOLERANCE_PERCENT,
+            blockchainStatus: await fetchFujiNetworkStatus(),
+          });
+          target = pgWorkspace.reports.find((r) => r.id === reportId);
+        }
+      }
+
+      if (!target || !target.evidence_report) {
+        res.status(404).json({ error: 'Evidence report not found.' });
+        return;
+      }
+
+      const pdfBuffer = await generateEvidenceReportPdf(target.evidence_report);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${reportId}-evidence-report.pdf"`,
+      );
+      res.send(pdfBuffer);
+    } catch (err) {
+      res.status(500).json({
+        error:
+          err instanceof Error ? err.message : 'PDF generation failed',
+      });
+    }
+  });
+
+  app.post('/api/reset', async (_req, res) => {
+    const initial = await createInitialDemoDatabase();
+    await saveDemoDatabase(initial);
+    res.json({ ok: true });
   });
 
   if (process.env.NODE_ENV !== 'production') {

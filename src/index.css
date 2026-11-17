@@ -9,8 +9,16 @@
 @layer base {
   html {
     font-family: var(--font-sans);
+    background-color: #0B1120;
+    color: #F8FAFC;
+    color-scheme: dark;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #0B1120;
+    color: #F8FAFC;
   }
 
   h1, h2, h3, h4 {
@@ -24,4 +32,22 @@
 
 .text-balance {
   text-wrap: balance;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0B1120;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
 }

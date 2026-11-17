@@ -1,172 +1,221 @@
 export type VerificationStatus =
-  | 'Verified'
-  | 'Mismatch'
-  | 'Insufficient Evidence'
-  | 'Needs Human Review';
+  | 'VERIFIED'
+  | 'MISMATCH'
+  | 'INSUFFICIENT EVIDENCE'
+  | 'NEEDS HUMAN REVIEW';
 
-export type ClaimCategory =
-  | 'Income Statement'
-  | 'Balance Sheet'
-  | 'Cash Flow'
-  | 'Financial Ratio';
+export type ClaimReviewState =
+  | VerificationStatus
+  | 'PENDING';
 
-export type RuleOutcome = 'pass' | 'fail' | 'warn' | 'skip';
+export type FinancialUnit = 'VND' | 'Million VND' | 'Billion VND' | '%' | 'x';
 
-export interface RuleCheckDetail {
-  rule: 'Source' | 'Period' | 'Unit' | 'Formula' | 'Value';
-  outcome: RuleOutcome;
+export type ReportType = 'Consolidated' | 'Separate';
+
+export type ValidationRuleType =
+  | 'NUMERICAL'
+  | 'PERIOD'
+  | 'UNIT'
+  | 'REPORT_TYPE'
+  | 'FORMULA'
+  | 'EVIDENCE'
+  | 'MISSING_EVIDENCE'
+  | 'HUMAN_REVIEW';
+
+export interface FinancialClaimInput {
+  claim_id: string;
+  claim_type: 'financial_metric' | 'financial_ratio' | 'subjective_claim';
+  metric: string;
+  company: string;
+  period: string;
+  report_type: ReportType;
+  reported_value: number | null;
+  currency: string;
+  unit: string;
+  formula: string | null;
+  source_document: string;
+  source_page: number | null;
+  source_location: string;
+  evidence: string;
+  verification_status: ClaimReviewState;
+  uncertain?: boolean;
+  ambiguous_reason?: string;
+}
+
+export interface ReferenceMetric {
+  metric: string;
+  company: string;
+  ticker: string;
+  exchange: string;
+  period: string;
+  report_type: ReportType;
+  reference_value: number;
+  currency: string;
+  unit: string;
+  formula: string | null;
+  formula_operands?: Record<string, number>;
+  source_document: string;
+  source_page: number;
+  source_location: string;
+  requires_human_review?: boolean;
+  ambiguity_note?: string;
+}
+
+export interface RuleCheckResult {
+  rule: ValidationRuleType;
+  label: string;
+  passed: boolean;
+  warning?: boolean;
   expected: string;
   actual: string;
-  messageVi: string;
-  messageEn: string;
+  detail: string;
 }
 
-export interface GroundTruthItem {
-  claimId: string;
-  metricCode: string;
-  metricNameEn: string;
-  metricNameVi: string;
-  category: ClaimCategory;
-  standardValue: number;
-  unit: string;
+export interface HumanReviewRecord {
+  id: string;
+  claim_id: string;
+  reviewer_id: string;
+  reviewer_name: string;
+  decision: 'VERIFIED' | 'MISMATCH' | 'INSUFFICIENT EVIDENCE';
+  comment: string;
+  previous_value: number | null;
+  updated_value: number | null;
+  created_at: string;
+}
+
+export interface VerificationResultItem {
+  claim_id: string;
+  claim_type: FinancialClaimInput['claim_type'];
+  metric: string;
+  company: string;
   period: string;
-  formulaExpression?: string;
-  formulaOperands?: Record<string, number>;
-  sourceDocument: string;
-  sourcePageRef: string;
-  tolerancePercent: number;
-  hitlThresholdPercent?: number;
-  requiresAuditorJudgment?: boolean;
-  judgmentNoteEn?: string;
-  judgmentNoteVi?: string;
-}
-
-export interface SellerClaim {
-  claimId: string;
-  metricCode: string;
-  metricNameEn: string;
-  metricNameVi: string;
-  category: ClaimCategory;
-  sellerValue: number | null;
+  report_type: ReportType;
+  reported_value: number | null;
+  normalized_reported_value: number | null;
+  reference_value: number | null;
+  currency: string;
   unit: string;
-  period: string;
-  formulaNote?: string;
-  sourceRef: string;
-  sellerCommentaryEn?: string;
-  sellerCommentaryVi?: string;
-}
-
-export interface HitlResolution {
-  claimId: string;
-  decision: 'Verified' | 'Mismatch';
-  reviewerName: string;
-  reviewerRole: string;
-  note: string;
-  resolvedAt: string;
-}
-
-export interface VerifiedClaimResult {
-  claimId: string;
-  metricCode: string;
-  metricNameEn: string;
-  metricNameVi: string;
-  category: ClaimCategory;
-  sellerValue: number | null;
-  sellerUnit: string;
-  sellerPeriod: string;
-  sellerSourceRef: string;
-  standardValue: number;
-  standardUnit: string;
-  standardPeriod: string;
-  standardSource: string;
-  varianceAbs: number | null;
-  variancePct: number | null;
-  autoStatus: VerificationStatus;
-  finalStatus: VerificationStatus;
-  reasonEn: string;
-  reasonVi: string;
-  faultType:
-    | 'None'
-    | 'Wrong Period'
-    | 'Wrong Unit'
-    | 'Wrong Value'
-    | 'Formula Error'
-    | 'Missing Source'
-    | 'Auditor Judgment';
-  rules: RuleCheckDetail[];
-  hitlResolution: HitlResolution | null;
+  reference_unit: string;
+  difference_abs: number | null;
+  difference_pct: number | null;
+  difference_label: string;
+  validation_rule: ValidationRuleType;
+  formula: string | null;
+  recalculated_formula_value: number | null;
+  source_document: string;
+  source_page: number | null;
+  source_location: string;
+  reference_source: string;
+  reference_page: number | null;
+  evidence: string;
+  auto_status: VerificationStatus;
+  status: VerificationStatus;
+  verification_source: 'AUTOMATIC_ENGINE' | 'HUMAN_APPROVED';
+  explanation: string;
+  rules: RuleCheckResult[];
+  human_review: HumanReviewRecord | null;
+  timestamp: string;
 }
 
 export interface EvidenceSummary {
-  totalClaims: number;
-  verifiedCount: number;
-  mismatchCount: number;
-  insufficientEvidenceCount: number;
-  needsHumanReviewCount: number;
-  overallVerdict: 'Approved' | 'Rejected' | 'Pending HITL';
+  total_claims: number;
+  verified: number;
+  mismatch: number;
+  insufficient_evidence: number;
+  needs_human_review: number;
+  overall_status: 'VERIFIED' | 'PARTIAL_MISMATCH' | 'PENDING_REVIEW';
 }
 
 export interface EvidenceReport {
-  reportId: string;
-  enterpriseName: string;
+  report_id: string;
+  company: string;
   ticker: string;
   exchange: string;
-  statementType: string;
-  reportingPeriod: string;
-  sellerAgentId: string;
-  buyerAgentId: string;
-  generatedAt: string;
+  reporting_period: string;
+  report_type: ReportType;
+  document_hash: string;
+  evidence_hash: string;
+  verification_timestamp: string;
+  verification_engine_version: string;
+  tolerance_percent: number;
   summary: EvidenceSummary;
-  reportHash: string;
-  claims: VerifiedClaimResult[];
+  claims: VerificationResultItem[];
+  human_reviews: HumanReviewRecord[];
+  blockchain_record: BlockchainRecord | null;
+  is_demo_data: boolean;
 }
 
-export interface FujiAnchorRecord {
-  anchorId: string;
-  reportId: string;
-  reportHash: string;
-  contractAddress: string;
-  chainId: number;
-  networkName: string;
-  blockNumber: number;
-  txHash: string;
-  explorerUrl: string;
-  overallVerdict: string;
-  verifiedCount: number;
-  totalClaims: number;
-  anchoredAt: string;
-  anchorMode: 'wallet-live' | 'fuji-rpc-recorded';
-  rpcVerified: boolean;
+export interface BlockchainRecord {
+  id: string;
+  report_id: string;
+  report_hash: string;
+  evidence_hash: string;
+  verification_status: string;
+  version: number;
+  transaction_hash: string;
+  contract_address: string;
+  network: string;
+  chain_id: number;
+  block_number: number;
+  explorer_url: string | null;
+  mode: 'LIVE_FUJI_WALLET' | 'DEMO_SIMULATION';
+  created_at: string;
 }
 
-export interface BuyerDecision {
-  decision: 'Pending' | 'Accepted' | 'Revision Requested';
-  buyerName: string;
-  note: string;
-  decidedAt: string | null;
+export interface ReportRecord {
+  id: string;
+  company_name: string;
+  ticker: string;
+  exchange: string;
+  original_filename: string;
+  file_size: number;
+  file_type: string;
+  document_hash: string;
+  reporting_period: string;
+  report_type: ReportType;
+  fiscal_year: string;
+  currency: string;
+  unit: string;
+  storage_path: string;
+  status: 'EXTRACTED' | 'VERIFIED' | 'MISMATCH' | 'PENDING_REVIEW';
+  buyer_decision: 'Pending' | 'Accepted' | 'Revision Requested';
+  buyer_note: string;
+  is_demo_data: boolean;
+  created_at: string;
+  extracted_claims: FinancialClaimInput[];
+  verification_results: VerificationResultItem[];
+  evidence_report: EvidenceReport | null;
+  blockchain_record: BlockchainRecord | null;
+  human_reviews: HumanReviewRecord[];
 }
 
-export type ScenarioPresetId = 'faulty-demo' | 'clean-revised';
-
-export interface WorkspaceState {
-  scenarioId: ScenarioPresetId;
-  enterprise: {
-    name: string;
-    ticker: string;
-    exchange: string;
-    statementType: string;
-    reportingPeriod: string;
-    auditor: string;
-  };
-  sellerAgentId: string;
-  buyerAgentId: string;
-  sellerClaims: SellerClaim[];
-  groundTruth: GroundTruthItem[];
-  evidenceReport: EvidenceReport | null;
-  fujiAnchor: FujiAnchorRecord | null;
-  anchorHistory: FujiAnchorRecord[];
-  buyerDecision: BuyerDecision;
-  lastUpdatedAt: string;
+export interface ActivityEvent {
+  id: string;
+  report_id: string;
+  title: string;
+  description: string;
+  status: 'info' | 'verified' | 'warning' | 'error';
+  timestamp: string;
 }
 
-export type Language = 'en' | 'vi';
+export interface BlockchainNetworkStatus {
+  network: string;
+  chain_id: number;
+  connected: boolean;
+  rpc_url: string;
+  contract_address: string;
+  block_number: number | null;
+  explorer_base_url: string;
+  mode_label: string;
+}
+
+export interface WorkspacePayload {
+  active_report_id: string;
+  tolerance_percent: number;
+  reports: ReportRecord[];
+  reference_dataset: ReferenceMetric[];
+  activities: ActivityEvent[];
+  blockchain_records: BlockchainRecord[];
+  blockchain_status: BlockchainNetworkStatus;
+  persistence_mode: 'POSTGRES_CLOUDSQL' | 'LOCAL_DEMO_PERSISTENCE';
+}

@@ -1,135 +1,153 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FPT_GROUND_TRUTH,
-  SELLER_REPORT_CLEAN_REVISED,
-  SELLER_REPORT_FAULTY_DEMO,
+  DEMO_REFERENCE_DATASET,
+  DEMO_SELLER_CLAIMS,
 } from '../data/fptSeedData.ts';
 import {
-  canAcceptBuyerReport,
-  runVerificationEngine,
-  verifySingleClaim,
+  buildEvidenceReport,
+  normalizeFinancialValue,
+  verifyClaimDeterministic,
 } from './verification.ts';
 
-test('verifySingleClaim marks exact matching claim as Verified', () => {
-  const claim = SELLER_REPORT_FAULTY_DEMO[0]; // CLM-01 Net Revenue
-  const truth = FPT_GROUND_TRUTH[0];
-  const result = verifySingleClaim(claim, truth);
+test('normalizeFinancialValue converts VND, Million VND, and Billion VND accurately', () => {
+  const m2b = normalizeFinancialValue(7857000, 'Million VND', 'Billion VND');
+  assert.equal(m2b.value, 7857);
+  assert.equal(m2b.convertible, true);
+  assert.equal(m2b.unitMatched, false);
 
-  assert.equal(result.finalStatus, 'Verified');
-  assert.equal(result.faultType, 'None');
-  assert.equal(result.variancePct, 0);
+  const b2m = normalizeFinancialValue(10, 'Billion VND', 'Million VND');
+  assert.equal(b2m.value, 10000);
 });
 
-test('verifySingleClaim detects formula error, wrong unit, wrong period, missing source, and HITL', () => {
-  // CLM-03: Gross margin 41.5% vs 37.8% (Formula Error)
-  const clm03 = verifySingleClaim(
-    SELLER_REPORT_FAULTY_DEMO[2],
-    FPT_GROUND_TRUTH[2],
+test('verifyClaimDeterministic validates formula, period, unit normalization, missing evidence, and human review', () => {
+  // CLM-005: 7,857,000 Million VND normalizes to 7,857 Billion VND -> VERIFIED
+  const clm5 = verifyClaimDeterministic(
+    DEMO_SELLER_CLAIMS[4],
+    DEMO_REFERENCE_DATASET,
   );
-  assert.equal(clm03.finalStatus, 'Mismatch');
-  assert.equal(clm03.faultType, 'Formula Error');
+  assert.equal(clm5.status, 'VERIFIED');
+  assert.equal(clm5.normalized_reported_value, 7857);
 
-  // CLM-04: Wrong unit (triệu VND vs tỷ VND)
-  const clm04 = verifySingleClaim(
-    SELLER_REPORT_FAULTY_DEMO[3],
-    FPT_GROUND_TRUTH[3],
+  // CLM-007: Missing source -> INSUFFICIENT EVIDENCE
+  const clm7 = verifyClaimDeterministic(
+    DEMO_SELLER_CLAIMS[6],
+    DEMO_REFERENCE_DATASET,
   );
-  assert.equal(clm04.finalStatus, 'Mismatch');
-  assert.equal(clm04.faultType, 'Wrong Unit');
+  assert.equal(clm7.status, 'INSUFFICIENT EVIDENCE');
+  assert.equal(clm7.validation_rule, 'MISSING_EVIDENCE');
 
-  // CLM-06: Wrong period (Q3/2025 vs FY2025)
-  const clm06 = verifySingleClaim(
-    SELLER_REPORT_FAULTY_DEMO[5],
-    FPT_GROUND_TRUTH[5],
+  // CLM-008: Q3/2025 vs FY2025 -> MISMATCH (PERIOD)
+  const clm8 = verifyClaimDeterministic(
+    DEMO_SELLER_CLAIMS[7],
+    DEMO_REFERENCE_DATASET,
   );
-  assert.equal(clm06.finalStatus, 'Mismatch');
-  assert.equal(clm06.faultType, 'Wrong Period');
+  assert.equal(clm8.status, 'MISMATCH');
+  assert.equal(clm8.validation_rule, 'PERIOD');
 
-  // CLM-07: Missing source -> Insufficient Evidence
-  const clm07 = verifySingleClaim(
-    SELLER_REPORT_FAULTY_DEMO[6],
-    FPT_GROUND_TRUTH[6],
+  // CLM-010: Revenue Growth 18.5% vs recalculated 12.3% -> MISMATCH (FORMULA)
+  const clm10 = verifyClaimDeterministic(
+    DEMO_SELLER_CLAIMS[9],
+    DEMO_REFERENCE_DATASET,
   );
-  assert.equal(clm07.finalStatus, 'Insufficient Evidence');
-  assert.equal(clm07.faultType, 'Missing Source');
-
-  // CLM-10: Borderline R&D provision -> Needs Human Review
-  const clm10 = verifySingleClaim(
-    SELLER_REPORT_FAULTY_DEMO[9],
-    FPT_GROUND_TRUTH[9],
-  );
-  assert.equal(clm10.finalStatus, 'Needs Human Review');
-  assert.equal(clm10.faultType, 'Auditor Judgment');
+  assert.equal(clm10.status, 'MISMATCH');
+  assert.equal(clm10.validation_rule, 'FORMULA');
+  assert.equal(clm10.recalculated_formula_value, 12.3);
 });
 
-test('runVerificationEngine produces expected counts for faulty demo and clean report', async () => {
-  const faultyReport = await runVerificationEngine({
-    reportId: 'RPT-TEST-1',
-    enterpriseName: 'FPT Corporation',
+test('buildEvidenceReport matches exact 5/2/1/2 demo distribution and tracks HITL audit trail', async () => {
+  const { evidenceReport } = await buildEvidenceReport({
+    report_id: 'RPT-DEMO-FPT-2025',
+    company: 'FPT Corporation (DEMO DATA)',
     ticker: 'FPT',
     exchange: 'HOSE',
-    statementType: 'Consolidated',
-    reportingPeriod: 'FY2025',
-    sellerAgentId: 'seller-agent-01',
-    buyerAgentId: 'buyer-agent-01',
-    sellerClaims: SELLER_REPORT_FAULTY_DEMO,
-    groundTruth: FPT_GROUND_TRUTH,
+    reporting_period: 'FY2025',
+    report_type: 'Consolidated',
+    document_hash: '0x' + 'a'.repeat(64),
+    tolerance_percent: 0.5,
+    claims: DEMO_SELLER_CLAIMS,
+    reference_dataset: DEMO_REFERENCE_DATASET,
+    is_demo_data: true,
   });
 
-  assert.equal(faultyReport.summary.totalClaims, 10);
-  assert.equal(faultyReport.summary.verifiedCount, 4); // CLM-01, 02, 05, 09
-  assert.equal(faultyReport.summary.mismatchCount, 4); // CLM-03, 04, 06, 08
-  assert.equal(faultyReport.summary.insufficientEvidenceCount, 1); // CLM-07
-  assert.equal(faultyReport.summary.needsHumanReviewCount, 1); // CLM-10
-  assert.equal(faultyReport.summary.overallVerdict, 'Pending HITL');
-  assert.match(faultyReport.reportHash, /^0x[0-9a-f]{64}$/);
-  assert.equal(canAcceptBuyerReport(faultyReport).allowed, false);
+  assert.equal(evidenceReport.summary.total_claims, 10);
+  assert.equal(evidenceReport.summary.verified, 5);
+  assert.equal(evidenceReport.summary.mismatch, 2);
+  assert.equal(evidenceReport.summary.insufficient_evidence, 1);
+  assert.equal(evidenceReport.summary.needs_human_review, 2);
+  assert.match(evidenceReport.evidence_hash, /^0x[0-9a-f]{64}$/);
 
-  // Applying HITL approval to CLM-10 changes hash and reduces pending HITL to 0
-  const hitlApprovedReport = await runVerificationEngine({
-    reportId: 'RPT-TEST-1',
-    enterpriseName: 'FPT Corporation',
+  // Resolve one HITL claim and verify verification_source becomes HUMAN_APPROVED
+  const { evidenceReport: updated } = await buildEvidenceReport({
+    report_id: 'RPT-DEMO-FPT-2025',
+    company: 'FPT Corporation (DEMO DATA)',
     ticker: 'FPT',
     exchange: 'HOSE',
-    statementType: 'Consolidated',
-    reportingPeriod: 'FY2025',
-    sellerAgentId: 'seller-agent-01',
-    buyerAgentId: 'buyer-agent-01',
-    sellerClaims: SELLER_REPORT_FAULTY_DEMO,
-    groundTruth: FPT_GROUND_TRUTH,
-    hitlMap: {
-      'CLM-10': {
-        claimId: 'CLM-10',
-        decision: 'Verified',
-        reviewerName: 'Nguyen Minh Tuan, CPA',
-        reviewerRole: 'Lead Auditor',
-        note: 'Verified Note V.28 R&D add-back documentation.',
-        resolvedAt: '2026-11-17T12:00:00.000Z',
+    reporting_period: 'FY2025',
+    report_type: 'Consolidated',
+    document_hash: '0x' + 'a'.repeat(64),
+    tolerance_percent: 0.5,
+    claims: DEMO_SELLER_CLAIMS,
+    reference_dataset: DEMO_REFERENCE_DATASET,
+    human_reviews: [
+      {
+        id: 'REV-1',
+        claim_id: 'CLM-004',
+        reviewer_id: 'auditor-01',
+        reviewer_name: 'Nguyen Minh Tuan, CPA',
+        decision: 'VERIFIED',
+        comment: 'Confirmed Note V.24 FX adjustment matches audited filing.',
+        previous_value: 11045,
+        updated_value: 11045,
+        created_at: '2026-11-17T12:00:00.000Z',
       },
-    },
+    ],
+    is_demo_data: true,
   });
 
-  assert.equal(hitlApprovedReport.summary.needsHumanReviewCount, 0);
-  assert.equal(hitlApprovedReport.summary.verifiedCount, 5);
-  assert.equal(hitlApprovedReport.summary.overallVerdict, 'Rejected');
-  assert.notEqual(hitlApprovedReport.reportHash, faultyReport.reportHash);
-
-  // Clean report passes all 10 claims and allows Buyer acceptance
-  const cleanReport = await runVerificationEngine({
-    reportId: 'RPT-TEST-2',
-    enterpriseName: 'FPT Corporation',
-    ticker: 'FPT',
-    exchange: 'HOSE',
-    statementType: 'Consolidated',
-    reportingPeriod: 'FY2025',
-    sellerAgentId: 'seller-agent-01',
-    buyerAgentId: 'buyer-agent-01',
-    sellerClaims: SELLER_REPORT_CLEAN_REVISED,
-    groundTruth: FPT_GROUND_TRUTH,
-  });
-
-  assert.equal(cleanReport.summary.verifiedCount, 10);
-  assert.equal(cleanReport.summary.overallVerdict, 'Approved');
-  assert.equal(canAcceptBuyerReport(cleanReport).allowed, true);
+  assert.equal(updated.summary.verified, 6);
+  assert.equal(updated.summary.needs_human_review, 1);
+  assert.notEqual(updated.evidence_hash, evidenceReport.evidence_hash);
+  const clm4 = updated.claims.find((c) => c.claim_id === 'CLM-004');
+  assert.equal(clm4?.verification_source, 'HUMAN_APPROVED');
 });
+
+test('processUploadedDocument + extractFinancialClaims deterministically parses structured CSV reports', async () => {
+  const { processUploadedDocument } = await import('./documentProcessor.ts');
+  const { extractFinancialClaims } = await import('./geminiExtractor.ts');
+
+  const csv = [
+    'claim_id,metric,reported_value,unit,period,source_page,evidence',
+    'CLM-CSV-1,Revenue,62849,Billion VND,FY2025,7,"Net revenue 62,849 Billion VND"',
+    'CLM-CSV-2,Revenue Growth,18.5,%,FY2025,2,"Executive summary 18.5%"',
+  ].join('\n');
+
+  const processed = await processUploadedDocument({
+    buffer: Buffer.from(csv, 'utf-8'),
+    originalFilename: 'sample-test.csv',
+    mimeType: 'text/csv',
+  });
+
+  assert.match(processed.documentHash, /^0x[0-9a-f]{64}$/);
+  assert.ok(processed.structuredJsonClaims && processed.structuredJsonClaims.length === 2);
+
+  const extracted = await extractFinancialClaims({
+    extractedText: processed.extractedText,
+    structuredRows: processed.structuredJsonClaims,
+    companyName: 'FPT Corporation (DEMO DATA)',
+    period: 'FY2025',
+    reportType: 'Consolidated',
+    currency: 'VND',
+    unit: 'Billion VND',
+    sourceDocument: processed.originalFilename,
+  });
+
+  assert.equal(extracted.extractor, 'STRUCTURED_PARSER');
+  assert.equal(extracted.claims.length, 2);
+
+  const revRes = verifyClaimDeterministic(extracted.claims[0], DEMO_REFERENCE_DATASET);
+  const growthRes = verifyClaimDeterministic(extracted.claims[1], DEMO_REFERENCE_DATASET);
+  assert.equal(revRes.status, 'VERIFIED');
+  assert.equal(growthRes.status, 'MISMATCH');
+});
+

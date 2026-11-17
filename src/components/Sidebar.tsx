@@ -1,113 +1,128 @@
 import {
-  ClipboardCheck,
-  Database,
-  Link2,
+  Blocks,
+  FileCheck2,
+  FileSpreadsheet,
+  FolderKanban,
+  LayoutDashboard,
+  Settings,
+  ShieldCheck,
+  Upload,
   X,
 } from 'lucide-react';
-import { COPY } from '../lib/i18n.ts';
-import type { Language } from '../types/stockproof.ts';
 
-export type ActiveTab = 'workbench' | 'evidence' | 'seller';
+export type AppRoute =
+  | '/dashboard'
+  | '/upload'
+  | '/reports'
+  | '/verification'
+  | '/evidence'
+  | '/blockchain'
+  | '/settings';
 
 interface SidebarProps {
-  activeTab: ActiveTab;
-  onSelectTab: (tab: ActiveTab) => void;
-  lang: Language;
-  enterpriseName: string;
-  ticker: string;
-  exchange: string;
-  period: string;
+  currentRoute: AppRoute;
+  onNavigate: (route: AppRoute) => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  activeReportId?: string;
 }
 
+const SIDEBAR_ITEMS: Array<{
+  route: AppRoute;
+  label: string;
+  icon: typeof LayoutDashboard;
+}> = [
+  { route: '/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
+  { route: '/upload', label: 'Tải báo cáo', icon: Upload },
+  { route: '/reports', label: 'Tất cả báo cáo', icon: FolderKanban },
+  { route: '/verification', label: 'Kết quả xác minh', icon: FileCheck2 },
+  { route: '/evidence', label: 'Báo cáo bằng chứng', icon: FileSpreadsheet },
+  { route: '/blockchain', label: 'Hồ sơ Blockchain', icon: Blocks },
+  { route: '/settings', label: 'Cài đặt', icon: Settings },
+];
+
 export function Sidebar({
-  activeTab,
-  onSelectTab,
-  lang,
-  enterpriseName,
-  ticker,
-  exchange,
-  period,
+  currentRoute,
+  onNavigate,
   mobileOpen,
   onCloseMobile,
+  activeReportId,
 }: SidebarProps) {
-  const t = COPY[lang].nav;
-
-  const items: Array<{
-    id: ActiveTab;
-    label: string;
-    icon: typeof ClipboardCheck;
-  }> = [
-    { id: 'workbench', label: t.workbench, icon: ClipboardCheck },
-    { id: 'evidence', label: t.evidence, icon: Link2 },
-    { id: 'seller', label: t.seller, icon: Database },
-  ];
-
   const navContent = (
-    <div className="flex flex-col h-full bg-white border-r border-slate-200 w-64">
-      <div className="h-16 px-6 flex items-center justify-between border-b border-slate-200">
-        <a
-          href="#workbench"
-          onClick={(e) => {
-            e.preventDefault();
-            onSelectTab('workbench');
+    <div className="flex flex-col h-full bg-[#111827] border-r border-slate-800/80 w-64">
+      <div className="h-16 px-5 flex items-center justify-between border-b border-slate-800/80">
+        <button
+          type="button"
+          onClick={() => {
+            onNavigate('/dashboard');
             onCloseMobile();
           }}
-          className="font-display text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap"
+          className="flex items-center gap-2.5 text-left"
         >
-          StockProof
-        </a>
+          <div className="h-8 w-8 rounded-lg bg-[#3B82F6]/15 border border-[#3B82F6]/40 flex items-center justify-center text-[#3B82F6]">
+            <ShieldCheck className="h-4.5 w-4.5" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-[#F8FAFC] tracking-tight">
+              StockProof
+            </div>
+            <div className="text-[11px] text-[#94A3B8]">
+              Xác minh chỉ tiêu
+            </div>
+          </div>
+        </button>
         <button
           type="button"
           onClick={onCloseMobile}
-          aria-label="Close navigation menu"
-          className="lg:hidden p-1.5 text-slate-500 hover:text-slate-900 rounded-md"
+          aria-label="Đóng thanh điều hướng"
+          className="lg:hidden p-1.5 rounded-md text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-slate-800"
         >
-          <X className="w-5 h-5" />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
-      <nav aria-label="Primary navigation" className="flex-1 px-3 py-5 space-y-1">
-        {items.map((item) => {
+      <nav
+        className="flex-1 p-3 space-y-1 overflow-y-auto"
+        aria-label="Thanh điều hướng chính"
+      >
+        {SIDEBAR_ITEMS.map((item) => {
           const Icon = item.icon;
-          const active = activeTab === item.id;
+          const active = currentRoute === item.route;
           return (
             <button
-              key={item.id}
+              key={item.route}
               type="button"
               onClick={() => {
-                onSelectTab(item.id);
+                onNavigate(item.route);
                 onCloseMobile();
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors text-left whitespace-nowrap ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 active
-                  ? 'bg-blue-50 text-blue-800'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  ? 'bg-[#172033] text-[#F8FAFC] border border-[#3B82F6]/40'
+                  : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#172033]/60 border border-transparent'
               }`}
             >
               <Icon
-                className={`w-4 h-4 shrink-0 ${
-                  active ? 'text-blue-700' : 'text-slate-400'
+                className={`h-4 w-4 shrink-0 ${
+                  active ? 'text-[#3B82F6]' : 'text-[#94A3B8]'
                 }`}
-                aria-hidden="true"
               />
-              <span className="truncate">{item.label}</span>
+              <span>{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      <div className="px-5 py-4 border-t border-slate-200 text-xs text-slate-600 space-y-1.5">
-        <div className="font-medium text-slate-900 truncate">{enterpriseName}</div>
-        <div className="flex items-center gap-1.5 text-slate-500 font-mono tabular-nums">
-          <span>
-            {exchange}: {ticker}
-          </span>
-          <span aria-hidden="true">·</span>
-          <span>{period}</span>
+      <div className="p-4 border-t border-slate-800/80 space-y-2">
+        <div className="text-[11px] uppercase tracking-wider text-[#94A3B8]">
+          Hồ sơ đang kiểm tra
         </div>
-        <div className="text-slate-500">Avalanche Fuji C-Chain · 43113</div>
+        <div className="text-xs font-mono text-[#CBD5E1] truncate">
+          {activeReportId || 'Chưa chọn báo cáo'}
+        </div>
+        <div className="text-[11px] text-[#94A3B8] leading-relaxed">
+          Xác minh mọi chỉ tiêu tài chính.
+        </div>
       </div>
     </div>
   );
@@ -115,10 +130,11 @@ export function Sidebar({
   return (
     <>
       <aside className="hidden lg:block shrink-0">{navContent}</aside>
+
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
           <div
-            className="fixed inset-0 bg-slate-900/40"
+            className="fixed inset-0 bg-black/60"
             onClick={onCloseMobile}
             aria-hidden="true"
           />
