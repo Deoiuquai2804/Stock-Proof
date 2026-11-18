@@ -182,11 +182,6 @@ export function VerificationPage({
             <h1 className="text-xl font-semibold text-[#F8FAFC]">
               Kết quả xác minh
             </h1>
-            {activeReport.is_demo_data && (
-              <span className="text-xs font-medium text-[#F59E0B]">
-                DỮ LIỆU MẪU
-              </span>
-            )}
           </div>
           <p className="text-xs text-[#94A3B8] mt-1">
             {activeReport.company_name} ({activeReport.exchange}:{' '}

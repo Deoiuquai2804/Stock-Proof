@@ -48,8 +48,8 @@ export function ReportsPage({
             Tất cả báo cáo
           </h1>
           <p className="text-xs text-[#94A3B8] mt-1">
-            Danh sách báo cáo tài chính đã tải lên và dữ liệu mẫu, xem tóm tắt
-            xác minh hoặc lưu mã băm lên Avalanche Fuji.
+            Danh sách báo cáo tài chính đã tải lên, xem tóm tắt xác minh hoặc
+            lưu mã băm lên Avalanche Fuji.
           </p>
         </div>
 
@@ -116,7 +116,9 @@ export function ReportsPage({
                     colSpan={7}
                     className="py-8 text-center text-xs text-[#94A3B8]"
                   >
-                    Không có báo cáo nào phù hợp với bộ lọc hiện tại.
+                    {reports.length === 0
+                      ? 'Chưa có báo cáo nào. Hãy tải lên báo cáo tài chính đầu tiên để bắt đầu xác minh.'
+                      : 'Không có báo cáo nào phù hợp với bộ lọc hiện tại.'}
                   </td>
                 </tr>
               ) : (
@@ -132,11 +134,6 @@ export function ReportsPage({
                     >
                       <td className="py-3.5 px-3 font-mono text-[#CBD5E1] whitespace-nowrap">
                         <div>{rep.id}</div>
-                        {rep.is_demo_data && (
-                          <span className="text-[10px] font-sans text-[#F59E0B]">
-                            DỮ LIỆU MẪU
-                          </span>
-                        )}
                       </td>
                       <td className="py-3.5 px-3 max-w-[210px]">
                         <div className="font-medium text-[#F8FAFC] truncate">

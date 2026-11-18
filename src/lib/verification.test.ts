@@ -1,14 +1,222 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  DEMO_REFERENCE_DATASET,
-  DEMO_SELLER_CLAIMS,
-} from '../data/fptSeedData.ts';
+import type { FinancialClaimInput, ReferenceMetric } from '../types/stockproof.ts';
 import {
   buildEvidenceReport,
   normalizeFinancialValue,
   verifyClaimDeterministic,
 } from './verification.ts';
+
+const TEST_COMPANY = 'Công ty Cổ phần Kiểm thử Alpha';
+
+const TEST_REFERENCE_DATASET: ReferenceMetric[] = [
+  {
+    metric: 'Doanh thu thuần',
+    company: TEST_COMPANY,
+    ticker: 'ALP',
+    exchange: 'HOSE',
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reference_value: 62849,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: null,
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 7,
+    source_location: 'Báo cáo KQKD hợp nhất - Mã số 10',
+  },
+  {
+    metric: 'Lợi nhuận thuần từ HĐKD',
+    company: TEST_COMPANY,
+    ticker: 'ALP',
+    exchange: 'HOSE',
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reference_value: 10820,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: null,
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 8,
+    source_location: 'Báo cáo KQKD hợp nhất - Mã số 30',
+    requires_human_review: true,
+    ambiguity_note: 'Cần kiểm toán viên rà soát phân loại lại chênh lệch tỷ giá.',
+  },
+  {
+    metric: 'Lợi nhuận sau thuế',
+    company: TEST_COMPANY,
+    ticker: 'ALP',
+    exchange: 'HOSE',
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reference_value: 7857,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: null,
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 8,
+    source_location: 'Báo cáo KQKD hợp nhất - Mã số 60',
+  },
+  {
+    metric: 'Nợ phải trả',
+    company: TEST_COMPANY,
+    ticker: 'ALP',
+    exchange: 'HOSE',
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reference_value: 36218,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: 'Tổng tài sản - Vốn chủ sở hữu',
+    formula_operands: {
+      'Total Assets': 72003,
+      'Total Equity': 35785,
+    },
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 5,
+    source_location: 'Bảng cân đối kế toán hợp nhất - Mã số 300',
+  },
+  {
+    metric: 'Vốn chủ sở hữu',
+    company: TEST_COMPANY,
+    ticker: 'ALP',
+    exchange: 'HOSE',
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reference_value: 35785,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: null,
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 6,
+    source_location: 'Bảng cân đối kế toán hợp nhất - Mã số 400',
+  },
+  {
+    metric: 'Tăng trưởng doanh thu',
+    company: TEST_COMPANY,
+    ticker: 'ALP',
+    exchange: 'HOSE',
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reference_value: 12.3,
+    currency: '%',
+    unit: '%',
+    formula: '(Doanh thu kỳ này - Doanh thu kỳ trước) / Doanh thu kỳ trước * 100',
+    formula_operands: {
+      current_revenue: 62849,
+      previous_revenue: 55965,
+    },
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 7,
+    source_location: 'Báo cáo KQKD hợp nhất - So sánh cùng kỳ',
+  },
+];
+
+const TEST_CLAIMS: FinancialClaimInput[] = [
+  {
+    claim_id: 'CLM-001',
+    claim_type: 'financial_metric',
+    metric: 'Doanh thu thuần',
+    company: TEST_COMPANY,
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reported_value: 62849,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: null,
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 7,
+    source_location: 'Mã số 10',
+    evidence: 'Doanh thu thuần: 62.849 tỷ VND.',
+    verification_status: 'PENDING',
+  },
+  {
+    claim_id: 'CLM-004',
+    claim_type: 'subjective_claim',
+    metric: 'Lợi nhuận thuần từ HĐKD',
+    company: TEST_COMPANY,
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reported_value: 11045,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: null,
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 8,
+    source_location: 'Thuyết minh V.24',
+    evidence: 'Điều chỉnh chênh lệch tỷ giá chưa thực hiện.',
+    verification_status: 'PENDING',
+    uncertain: true,
+  },
+  {
+    claim_id: 'CLM-005',
+    claim_type: 'financial_metric',
+    metric: 'Lợi nhuận sau thuế',
+    company: TEST_COMPANY,
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reported_value: 7857000,
+    currency: 'VND',
+    unit: 'Triệu VND',
+    formula: null,
+    source_document: 'ALP_BCTC_HopNhat_FY2025.pdf',
+    source_page: 8,
+    source_location: 'Mã số 60',
+    evidence: 'Lợi nhuận sau thuế: 7.857.000 Triệu VND.',
+    verification_status: 'PENDING',
+  },
+  {
+    claim_id: 'CLM-007',
+    claim_type: 'financial_metric',
+    metric: 'Nợ phải trả',
+    company: TEST_COMPANY,
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reported_value: 36218,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: null,
+    source_document: '',
+    source_page: null,
+    source_location: '',
+    evidence: '',
+    verification_status: 'PENDING',
+  },
+  {
+    claim_id: 'CLM-008',
+    claim_type: 'financial_metric',
+    metric: 'Vốn chủ sở hữu',
+    company: TEST_COMPANY,
+    period: 'Q3/2025',
+    report_type: 'Consolidated',
+    reported_value: 29930,
+    currency: 'VND',
+    unit: 'Tỷ VND',
+    formula: null,
+    source_document: 'ALP_BCTC_Q3_2025.pdf',
+    source_page: 6,
+    source_location: 'Mã số 400',
+    evidence: 'Vốn chủ sở hữu Q3/2025: 29.930 tỷ VND.',
+    verification_status: 'PENDING',
+  },
+  {
+    claim_id: 'CLM-010',
+    claim_type: 'financial_ratio',
+    metric: 'Tăng trưởng doanh thu',
+    company: TEST_COMPANY,
+    period: 'FY2025',
+    report_type: 'Consolidated',
+    reported_value: 18.5,
+    currency: '%',
+    unit: '%',
+    formula: '(Doanh thu kỳ này - Doanh thu kỳ trước) / Doanh thu kỳ trước * 100',
+    source_document: 'ALP_TomTat_FY2025.pdf',
+    source_page: 2,
+    source_location: 'Tóm tắt điều hành',
+    evidence: 'Tăng trưởng doanh thu YoY đạt 18,5%.',
+    verification_status: 'PENDING',
+  },
+];
 
 test('normalizeFinancialValue converts VND, Million VND, and Billion VND accurately', () => {
   const m2b = normalizeFinancialValue(7857000, 'Million VND', 'Billion VND');
@@ -21,74 +229,61 @@ test('normalizeFinancialValue converts VND, Million VND, and Billion VND accurat
 });
 
 test('verifyClaimDeterministic validates formula, period, unit normalization, missing evidence, and human review', () => {
-  // CLM-005: 7,857,000 Million VND normalizes to 7,857 Billion VND -> VERIFIED
-  const clm5 = verifyClaimDeterministic(
-    DEMO_SELLER_CLAIMS[4],
-    DEMO_REFERENCE_DATASET,
-  );
+  // CLM-005: 7,857,000 Triệu VND -> 7,857 Tỷ VND -> VERIFIED
+  const clm5 = verifyClaimDeterministic(TEST_CLAIMS[2], TEST_REFERENCE_DATASET);
   assert.equal(clm5.status, 'VERIFIED');
   assert.equal(clm5.normalized_reported_value, 7857);
 
-  // CLM-007: Missing source -> INSUFFICIENT EVIDENCE
-  const clm7 = verifyClaimDeterministic(
-    DEMO_SELLER_CLAIMS[6],
-    DEMO_REFERENCE_DATASET,
-  );
+  // CLM-007: Thiếu nguồn -> INSUFFICIENT EVIDENCE
+  const clm7 = verifyClaimDeterministic(TEST_CLAIMS[3], TEST_REFERENCE_DATASET);
   assert.equal(clm7.status, 'INSUFFICIENT EVIDENCE');
   assert.equal(clm7.validation_rule, 'MISSING_EVIDENCE');
 
   // CLM-008: Q3/2025 vs FY2025 -> MISMATCH (PERIOD)
-  const clm8 = verifyClaimDeterministic(
-    DEMO_SELLER_CLAIMS[7],
-    DEMO_REFERENCE_DATASET,
-  );
+  const clm8 = verifyClaimDeterministic(TEST_CLAIMS[4], TEST_REFERENCE_DATASET);
   assert.equal(clm8.status, 'MISMATCH');
   assert.equal(clm8.validation_rule, 'PERIOD');
 
-  // CLM-010: Revenue Growth 18.5% vs recalculated 12.3% -> MISMATCH (FORMULA)
-  const clm10 = verifyClaimDeterministic(
-    DEMO_SELLER_CLAIMS[9],
-    DEMO_REFERENCE_DATASET,
-  );
+  // CLM-010: Tăng trưởng 18.5% vs 12.3% -> MISMATCH (FORMULA)
+  const clm10 = verifyClaimDeterministic(TEST_CLAIMS[5], TEST_REFERENCE_DATASET);
   assert.equal(clm10.status, 'MISMATCH');
   assert.equal(clm10.validation_rule, 'FORMULA');
   assert.equal(clm10.recalculated_formula_value, 12.3);
 });
 
-test('buildEvidenceReport matches exact 5/2/1/2 demo distribution and tracks HITL audit trail', async () => {
+test('buildEvidenceReport computes accurate summary counts and tracks HITL audit trail', async () => {
   const { evidenceReport } = await buildEvidenceReport({
-    report_id: 'RPT-DEMO-FPT-2025',
-    company: 'FPT Corporation (DEMO DATA)',
-    ticker: 'FPT',
+    report_id: 'RPT-TEST-ALP-2025',
+    company: TEST_COMPANY,
+    ticker: 'ALP',
     exchange: 'HOSE',
     reporting_period: 'FY2025',
     report_type: 'Consolidated',
     document_hash: '0x' + 'a'.repeat(64),
     tolerance_percent: 0.5,
-    claims: DEMO_SELLER_CLAIMS,
-    reference_dataset: DEMO_REFERENCE_DATASET,
-    is_demo_data: true,
+    claims: TEST_CLAIMS,
+    reference_dataset: TEST_REFERENCE_DATASET,
+    is_demo_data: false,
   });
 
-  assert.equal(evidenceReport.summary.total_claims, 10);
-  assert.equal(evidenceReport.summary.verified, 5);
+  assert.equal(evidenceReport.summary.total_claims, 6);
+  assert.equal(evidenceReport.summary.verified, 2);
   assert.equal(evidenceReport.summary.mismatch, 2);
   assert.equal(evidenceReport.summary.insufficient_evidence, 1);
-  assert.equal(evidenceReport.summary.needs_human_review, 2);
+  assert.equal(evidenceReport.summary.needs_human_review, 1);
   assert.match(evidenceReport.evidence_hash, /^0x[0-9a-f]{64}$/);
 
-  // Resolve one HITL claim and verify verification_source becomes HUMAN_APPROVED
   const { evidenceReport: updated } = await buildEvidenceReport({
-    report_id: 'RPT-DEMO-FPT-2025',
-    company: 'FPT Corporation (DEMO DATA)',
-    ticker: 'FPT',
+    report_id: 'RPT-TEST-ALP-2025',
+    company: TEST_COMPANY,
+    ticker: 'ALP',
     exchange: 'HOSE',
     reporting_period: 'FY2025',
     report_type: 'Consolidated',
     document_hash: '0x' + 'a'.repeat(64),
     tolerance_percent: 0.5,
-    claims: DEMO_SELLER_CLAIMS,
-    reference_dataset: DEMO_REFERENCE_DATASET,
+    claims: TEST_CLAIMS,
+    reference_dataset: TEST_REFERENCE_DATASET,
     human_reviews: [
       {
         id: 'REV-1',
@@ -102,11 +297,11 @@ test('buildEvidenceReport matches exact 5/2/1/2 demo distribution and tracks HIT
         created_at: '2026-11-17T12:00:00.000Z',
       },
     ],
-    is_demo_data: true,
+    is_demo_data: false,
   });
 
-  assert.equal(updated.summary.verified, 6);
-  assert.equal(updated.summary.needs_human_review, 1);
+  assert.equal(updated.summary.verified, 3);
+  assert.equal(updated.summary.needs_human_review, 0);
   assert.notEqual(updated.evidence_hash, evidenceReport.evidence_hash);
   const clm4 = updated.claims.find((c) => c.claim_id === 'CLM-004');
   assert.equal(clm4?.verification_source, 'HUMAN_APPROVED');
@@ -124,7 +319,7 @@ test('processUploadedDocument + extractFinancialClaims deterministically parses 
 
   const processed = await processUploadedDocument({
     buffer: Buffer.from(csv, 'utf-8'),
-    originalFilename: 'sample-test.csv',
+    originalFilename: 'report-test.csv',
     mimeType: 'text/csv',
   });
 
@@ -134,7 +329,7 @@ test('processUploadedDocument + extractFinancialClaims deterministically parses 
   const extracted = await extractFinancialClaims({
     extractedText: processed.extractedText,
     structuredRows: processed.structuredJsonClaims,
-    companyName: 'Công ty Cổ phần FPT (DỮ LIỆU MẪU)',
+    companyName: TEST_COMPANY,
     period: 'FY2025',
     reportType: 'Consolidated',
     currency: 'VND',
@@ -145,8 +340,8 @@ test('processUploadedDocument + extractFinancialClaims deterministically parses 
   assert.equal(extracted.extractor, 'STRUCTURED_PARSER');
   assert.equal(extracted.claims.length, 2);
 
-  const revRes = verifyClaimDeterministic(extracted.claims[0], DEMO_REFERENCE_DATASET);
-  const growthRes = verifyClaimDeterministic(extracted.claims[1], DEMO_REFERENCE_DATASET);
+  const revRes = verifyClaimDeterministic(extracted.claims[0], TEST_REFERENCE_DATASET);
+  const growthRes = verifyClaimDeterministic(extracted.claims[1], TEST_REFERENCE_DATASET);
   assert.equal(revRes.status, 'VERIFIED');
   assert.equal(growthRes.status, 'MISMATCH');
 });

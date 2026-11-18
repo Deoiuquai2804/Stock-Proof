@@ -86,12 +86,6 @@ export function DashboardPage({
             </span>
             <span>·</span>
             <span>Kiểm toán theo từng chỉ tiêu</span>
-            {activeReport?.is_demo_data && (
-              <>
-                <span>·</span>
-                <span className="text-[#F59E0B] font-medium">DỮ LIỆU MẪU</span>
-              </>
-            )}
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#F8FAFC] text-balance">
             Dữ liệu tài chính. Xác minh độc lập.
@@ -279,39 +273,51 @@ export function DashboardPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {workspace.reports.slice(0, 5).map((rep) => (
-                  <tr key={rep.id} className="hover:bg-[#111827]/50">
-                    <td className="py-3 pr-3 font-mono text-[#CBD5E1] whitespace-nowrap">
-                      {rep.id}
-                    </td>
-                    <td className="py-3 pr-3 text-[#F8FAFC] font-medium">
-                      <div className="truncate max-w-[180px]">
-                        {rep.company_name}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-3 text-[#94A3B8] whitespace-nowrap">
-                      {rep.reporting_period}
-                    </td>
-                    <td className="py-3 pr-3 tabular-nums text-[#F8FAFC]">
-                      {rep.extracted_claims.length}
-                    </td>
-                    <td className="py-3 pr-3">
-                      <StatusBadge status={rep.status} compact />
-                    </td>
-                    <td className="py-3 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSelectReport(rep.id);
-                          onNavigate('/verification');
-                        }}
-                        className="text-xs font-medium text-[#3B82F6] hover:text-[#60A5FA]"
-                      >
-                        Chi tiết
-                      </button>
+                {workspace.reports.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-8 text-center text-xs text-[#94A3B8]"
+                    >
+                      Chưa có báo cáo tài chính nào. Hãy tải báo cáo lên để bắt
+                      đầu xác minh.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  workspace.reports.slice(0, 5).map((rep) => (
+                    <tr key={rep.id} className="hover:bg-[#111827]/50">
+                      <td className="py-3 pr-3 font-mono text-[#CBD5E1] whitespace-nowrap">
+                        {rep.id}
+                      </td>
+                      <td className="py-3 pr-3 text-[#F8FAFC] font-medium">
+                        <div className="truncate max-w-[180px]">
+                          {rep.company_name}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-3 text-[#94A3B8] whitespace-nowrap">
+                        {rep.reporting_period}
+                      </td>
+                      <td className="py-3 pr-3 tabular-nums text-[#F8FAFC]">
+                        {rep.extracted_claims.length}
+                      </td>
+                      <td className="py-3 pr-3">
+                        <StatusBadge status={rep.status} compact />
+                      </td>
+                      <td className="py-3 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectReport(rep.id);
+                            onNavigate('/verification');
+                          }}
+                          className="text-xs font-medium text-[#3B82F6] hover:text-[#60A5FA]"
+                        >
+                          Chi tiết
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -326,37 +332,43 @@ export function DashboardPage({
           </div>
 
           <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-            {workspace.activities.slice(0, 8).map((act) => {
-              const dotColor =
-                act.status === 'verified'
-                  ? 'bg-[#22C55E]'
-                  : act.status === 'error'
-                    ? 'bg-[#EF4444]'
-                    : act.status === 'warning'
-                      ? 'bg-[#F59E0B]'
-                      : 'bg-[#3B82F6]';
-              return (
-                <div
-                  key={act.id}
-                  className="flex items-start gap-3 pb-3 border-b border-slate-800/60 last:border-b-0 last:pb-0"
-                >
-                  <span
-                    className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${dotColor}`}
-                  />
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="text-xs font-medium text-[#F8FAFC]">
-                      {act.title}
-                    </div>
-                    <div className="text-xs text-[#94A3B8] leading-relaxed">
-                      {act.description}
-                    </div>
-                    <div className="text-[11px] font-mono text-slate-500">
-                      {new Date(act.timestamp).toLocaleString('vi-VN')}
+            {workspace.activities.length === 0 ? (
+              <div className="py-8 text-center text-xs text-[#94A3B8]">
+                Chưa có hoạt động xác minh nào.
+              </div>
+            ) : (
+              workspace.activities.slice(0, 8).map((act) => {
+                const dotColor =
+                  act.status === 'verified'
+                    ? 'bg-[#22C55E]'
+                    : act.status === 'error'
+                      ? 'bg-[#EF4444]'
+                      : act.status === 'warning'
+                        ? 'bg-[#F59E0B]'
+                        : 'bg-[#3B82F6]';
+                return (
+                  <div
+                    key={act.id}
+                    className="flex items-start gap-3 pb-3 border-b border-slate-800/60 last:border-b-0 last:pb-0"
+                  >
+                    <span
+                      className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${dotColor}`}
+                    />
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="text-xs font-medium text-[#F8FAFC]">
+                        {act.title}
+                      </div>
+                      <div className="text-xs text-[#94A3B8] leading-relaxed">
+                        {act.description}
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-500">
+                        {new Date(act.timestamp).toLocaleString('vi-VN')}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </section>
       </div>

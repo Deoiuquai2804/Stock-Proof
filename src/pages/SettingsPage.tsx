@@ -55,7 +55,7 @@ export function SettingsPage({
     try {
       await onResetDemo();
       setFeedback(
-        'Đã khôi phục không gian làm việc mẫu về kịch bản FPT FY2025 ban đầu.',
+        'Đã đặt lại không gian làm việc về trạng thái trống ban đầu.',
       );
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Khôi phục thất bại.');
@@ -120,7 +120,7 @@ export function SettingsPage({
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 <span>
-                  {resetting ? 'Đang khôi phục...' : 'Đặt lại kịch bản mẫu'}
+                  {resetting ? 'Đang xóa dữ liệu...' : 'Xóa toàn bộ dữ liệu'}
                 </span>
               </button>
             </div>
@@ -149,16 +149,13 @@ export function SettingsPage({
         <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold text-[#F8FAFC]">
-              Bộ dữ liệu tham chiếu chuẩn (DỮ LIỆU MẪU)
+              Bộ dữ liệu tham chiếu chuẩn
             </h2>
             <p className="text-xs text-[#94A3B8]">
-              Số liệu đối chiếu gốc của Công ty Cổ phần FPT (HOSE: FPT · FY2025
-              Hợp nhất) được bộ máy xác minh sử dụng.
+              Danh sách các chỉ tiêu đối chiếu chuẩn được bộ máy xác minh sử
+              dụng khi có sẵn nguồn tham chiếu.
             </p>
           </div>
-          <span className="text-xs font-medium text-[#F59E0B] whitespace-nowrap">
-            DỮ LIỆU MẪU
-          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -173,29 +170,40 @@ export function SettingsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {referenceDataset.map((ref) => (
-                <tr key={ref.metric} className="hover:bg-[#111827]/40">
-                  <td className="py-3 px-4 font-medium text-[#F8FAFC] whitespace-nowrap">
-                    {ref.metric}
-                  </td>
-                  <td className="py-3 px-4 text-[#CBD5E1] whitespace-nowrap">
-                    {ref.period} ·{' '}
-                    {ref.report_type === 'Consolidated'
-                      ? 'Hợp nhất'
-                      : 'Công ty mẹ'}
-                  </td>
-                  <td className="py-3 px-4 font-mono tabular-nums text-[#22C55E] whitespace-nowrap">
-                    {ref.reference_value.toLocaleString()} {ref.unit}
-                  </td>
-                  <td className="py-3 px-4 font-mono text-[11px] text-[#94A3B8]">
-                    {ref.formula || 'Chỉ tiêu trực tiếp'}
-                  </td>
-                  <td className="py-3 px-4 text-[#94A3B8]">
-                    {ref.source_document} (Tr.{ref.source_page}) —{' '}
-                    {ref.source_location}
+              {referenceDataset.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="py-8 text-center text-xs text-[#94A3B8]"
+                  >
+                    Chưa có bộ dữ liệu tham chiếu chuẩn nào được cấu hình.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                referenceDataset.map((ref) => (
+                  <tr key={ref.metric} className="hover:bg-[#111827]/40">
+                    <td className="py-3 px-4 font-medium text-[#F8FAFC] whitespace-nowrap">
+                      {ref.metric}
+                    </td>
+                    <td className="py-3 px-4 text-[#CBD5E1] whitespace-nowrap">
+                      {ref.period} ·{' '}
+                      {ref.report_type === 'Consolidated'
+                        ? 'Hợp nhất'
+                        : 'Công ty mẹ'}
+                    </td>
+                    <td className="py-3 px-4 font-mono tabular-nums text-[#22C55E] whitespace-nowrap">
+                      {ref.reference_value.toLocaleString()} {ref.unit}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-[#94A3B8]">
+                      {ref.formula || 'Chỉ tiêu trực tiếp'}
+                    </td>
+                    <td className="py-3 px-4 text-[#94A3B8]">
+                      {ref.source_document} (Tr.{ref.source_page}) —{' '}
+                      {ref.source_location}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

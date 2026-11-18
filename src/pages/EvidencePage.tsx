@@ -94,11 +94,6 @@ export function EvidencePage({
             <h1 className="text-xl font-semibold text-[#F8FAFC]">
               Hồ sơ bằng chứng kiểm toán
             </h1>
-            {ev.is_demo_data && (
-              <span className="text-xs font-medium text-[#F59E0B]">
-                DỮ LIỆU MẪU
-              </span>
-            )}
           </div>
           <p className="text-xs text-[#94A3B8] mt-1">
             Báo cáo bằng chứng 15 phần chuẩn hóa kèm mã băm SHA-256 của tài

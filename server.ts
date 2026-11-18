@@ -6,14 +6,6 @@ import { eq } from 'drizzle-orm';
 import express from 'express';
 import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
-import {
-  CONTRACT_ADDRESS_FUJI,
-  DEMO_COMPANY,
-  DEMO_INITIAL_ACTIVITIES,
-  DEMO_REFERENCE_DATASET,
-  DEMO_SELLER_CLAIMS,
-  createSeedReportSkeleton,
-} from './src/data/fptSeedData.ts';
 import { db, isSqlConfigured } from './src/db/index.ts';
 import { loadPostgresWorkspace, ensureCompany } from './src/db/repository.ts';
 import {
@@ -53,6 +45,9 @@ const FUJI_RPC_URL =
   process.env.AVALANCHE_FUJI_RPC_URL ||
   'https://api.avax-test.network/ext/bc/C/rpc';
 const FUJI_CHAIN_ID = 43113;
+const CONTRACT_ADDRESS_FUJI =
+  process.env.STOCKPROOF_CONTRACT_ADDRESS ||
+  '0x7F4c9E218A6b40D32E8819F5b12C4A03D9E8104B';
 const DB_DIR = path.resolve(process.cwd(), 'data');
 const DEMO_DB_FILE = path.resolve(DB_DIR, 'stockproof-demo.json');
 
@@ -117,41 +112,11 @@ async function fetchFujiNetworkStatus(): Promise<BlockchainNetworkStatus> {
 }
 
 async function createInitialDemoDatabase(): Promise<DemoDatabase> {
-  const skeleton = createSeedReportSkeleton();
-  const { results, evidenceReport } = await buildEvidenceReport({
-    report_id: skeleton.id,
-    company: skeleton.company_name,
-    ticker: skeleton.ticker,
-    exchange: skeleton.exchange,
-    reporting_period: skeleton.reporting_period,
-    report_type: skeleton.report_type,
-    document_hash: skeleton.document_hash,
-    tolerance_percent: DEFAULT_TOLERANCE_PERCENT,
-    claims: skeleton.extracted_claims,
-    reference_dataset: DEMO_REFERENCE_DATASET,
-    human_reviews: [],
-    blockchain_record: null,
-    is_demo_data: true,
-    timestamp: skeleton.created_at,
-  });
-
-  const seededReport: ReportRecord = {
-    ...skeleton,
-    status:
-      evidenceReport.summary.needs_human_review > 0
-        ? 'PENDING_REVIEW'
-        : evidenceReport.summary.mismatch > 0
-          ? 'MISMATCH'
-          : 'VERIFIED',
-    verification_results: results,
-    evidence_report: evidenceReport,
-  };
-
   return {
-    active_report_id: seededReport.id,
+    active_report_id: '',
     tolerance_percent: DEFAULT_TOLERANCE_PERCENT,
-    reports: [seededReport],
-    activities: [...DEMO_INITIAL_ACTIVITIES],
+    reports: [],
+    activities: [],
     blockchain_records: [],
   };
 }
@@ -160,11 +125,11 @@ async function loadDemoDatabase(): Promise<DemoDatabase> {
   try {
     const raw = await fs.readFile(DEMO_DB_FILE, 'utf-8');
     const parsed = JSON.parse(raw) as DemoDatabase;
-    if (parsed && Array.isArray(parsed.reports) && parsed.reports.length > 0) {
+    if (parsed && Array.isArray(parsed.reports)) {
       return parsed;
     }
   } catch {
-    // Seed initial demo DB
+    // Initialize empty local workspace
   }
   const initial = await createInitialDemoDatabase();
   await saveDemoDatabase(initial);
@@ -204,10 +169,10 @@ async function recomputeReport(
     document_hash: report.document_hash,
     tolerance_percent: tolerancePercent,
     claims: report.extracted_claims,
-    reference_dataset: DEMO_REFERENCE_DATASET,
+    reference_dataset: [],
     human_reviews: report.human_reviews,
     blockchain_record: report.blockchain_record,
-    is_demo_data: report.is_demo_data,
+    is_demo_data: false,
   });
 
   const nextStatus: ReportRecord['status'] =
@@ -291,78 +256,6 @@ async function startServer() {
     }
   });
 
-  app.get('/api/sample-report', (req, res) => {
-    const format = String(req.query.format || 'csv').toLowerCase();
-    if (format === 'json') {
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader(
-        'Content-Disposition',
-        'attachment; filename="FPT_FY2025_Sample_Claims.json"',
-      );
-      res.send(
-        JSON.stringify(
-          {
-            company: DEMO_COMPANY.name,
-            period: 'FY2025',
-            report_type: 'Consolidated',
-            claims: DEMO_SELLER_CLAIMS,
-          },
-          null,
-          2,
-        ),
-      );
-      return;
-    }
-
-    const headers = [
-      'claim_id',
-      'claim_type',
-      'metric',
-      'company',
-      'period',
-      'report_type',
-      'reported_value',
-      'currency',
-      'unit',
-      'formula',
-      'source_document',
-      'source_page',
-      'source_location',
-      'evidence',
-    ];
-    const escapeCsv = (val: unknown) => {
-      const str = val === null || val === undefined ? '' : String(val);
-      return `"${str.replace(/"/g, '""')}"`;
-    };
-    const rows = DEMO_SELLER_CLAIMS.map((c) =>
-      [
-        c.claim_id,
-        c.claim_type,
-        c.metric,
-        c.company,
-        c.period,
-        c.report_type,
-        c.reported_value ?? '',
-        c.currency,
-        c.unit,
-        c.formula ?? '',
-        c.source_document,
-        c.source_page ?? '',
-        c.source_location,
-        c.evidence,
-      ]
-        .map(escapeCsv)
-        .join(','),
-    );
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="FPT_FY2025_Sample_Claims.csv"',
-    );
-    res.send(csvContent);
-  });
-
   app.get('/api/workspace', async (req, res) => {
     try {
       const bcStatus = await fetchFujiNetworkStatus();
@@ -385,7 +278,7 @@ async function startServer() {
         active_report_id: demo.active_report_id,
         tolerance_percent: demo.tolerance_percent,
         reports: demo.reports,
-        reference_dataset: DEMO_REFERENCE_DATASET,
+        reference_dataset: [],
         activities: demo.activities,
         blockchain_records: demo.blockchain_records,
         blockchain_status: bcStatus,
@@ -462,8 +355,8 @@ async function startServer() {
     onProgress?: (pct: number) => void;
   }) {
     const { file, body, authUser, onProgress } = params;
-    const companyName = body.company_name?.trim() || DEMO_COMPANY.name;
-    const ticker = (body.ticker?.trim() || 'FPT').toUpperCase();
+    const companyName = body.company_name?.trim() || 'Doanh nghiệp chưa đặt tên';
+    const ticker = (body.ticker?.trim() || 'BCTC').toUpperCase();
     const reportingPeriod = body.reporting_period?.trim() || 'FY2025';
     const reportType: ReportType =
       body.report_type === 'Separate' ? 'Separate' : 'Consolidated';
@@ -733,16 +626,16 @@ async function startServer() {
 
         const { results, evidenceReport } = await buildEvidenceReport({
           report_id: repRow.reportCode,
-          company: claims[0]?.company || DEMO_COMPANY.name,
-          ticker: 'FPT',
+          company: claims[0]?.company || 'Doanh nghiệp chưa xác định',
+          ticker: 'BCTC',
           exchange: 'HOSE',
           reporting_period: repRow.reportingPeriod,
           report_type: (repRow.reportType as ReportType) || 'Consolidated',
           document_hash: repRow.documentHash,
           tolerance_percent: DEFAULT_TOLERANCE_PERCENT,
           claims,
-          reference_dataset: DEMO_REFERENCE_DATASET,
-          is_demo_data: repRow.reportCode.startsWith('RPT-DEMO-'),
+          reference_dataset: [],
+          is_demo_data: false,
         });
 
         for (let i = 0; i < claims.length; i++) {

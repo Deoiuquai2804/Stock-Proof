@@ -1,12 +1,6 @@
 import { desc, eq } from 'drizzle-orm';
 import {
-  DEMO_COMPANY,
-  DEMO_REFERENCE_DATASET,
-  createSeedReportSkeleton,
-} from '../data/fptSeedData.ts';
-import {
   buildEvidenceReport,
-  computeSha256Hex,
   DEFAULT_TOLERANCE_PERCENT,
 } from '../lib/verification.ts';
 import type {
@@ -49,105 +43,6 @@ export async function ensureCompany(
   return inserted[0];
 }
 
-export async function seedInitialPostgresReportForUser(userId: number) {
-  const existingReports = await db
-    .select()
-    .from(reports)
-    .where(eq(reports.userId, userId));
-  if (existingReports.length > 0) return;
-
-  const company = await ensureCompany(
-    DEMO_COMPANY.name,
-    DEMO_COMPANY.ticker,
-    DEMO_COMPANY.exchange,
-  );
-  const seed = createSeedReportSkeleton();
-  const reportCode = `${seed.id}-U${userId}`;
-
-  const [insertedReport] = await db
-    .insert(reports)
-    .values({
-      reportCode,
-      userId,
-      companyId: company.id,
-      originalFilename: seed.original_filename,
-      documentHash: seed.document_hash,
-      reportingPeriod: seed.reporting_period,
-      reportType: seed.report_type,
-      fiscalYear: seed.fiscal_year,
-      currency: seed.currency,
-      unit: seed.unit,
-      storagePath: seed.storage_path,
-      status: seed.status,
-      buyerDecision: seed.buyer_decision,
-      buyerNote: seed.buyer_note,
-    })
-    .returning();
-
-  const { results } = await buildEvidenceReport({
-    report_id: reportCode,
-    company: DEMO_COMPANY.name,
-    ticker: DEMO_COMPANY.ticker,
-    exchange: DEMO_COMPANY.exchange,
-    reporting_period: seed.reporting_period,
-    report_type: seed.report_type,
-    document_hash: seed.document_hash,
-    tolerance_percent: DEFAULT_TOLERANCE_PERCENT,
-    claims: seed.extracted_claims,
-    reference_dataset: DEMO_REFERENCE_DATASET,
-    is_demo_data: true,
-  });
-
-  for (let i = 0; i < seed.extracted_claims.length; i++) {
-    const rawClaim = seed.extracted_claims[i];
-    const verifiedItem = results[i];
-
-    const [insertedClaim] = await db
-      .insert(claims)
-      .values({
-        reportId: insertedReport.id,
-        claimCode: rawClaim.claim_id,
-        claimType: rawClaim.claim_type,
-        metric: rawClaim.metric,
-        reportedValue: rawClaim.reported_value,
-        referenceValue: verifiedItem.reference_value,
-        period: rawClaim.period,
-        reportType: rawClaim.report_type,
-        currency: rawClaim.currency,
-        unit: rawClaim.unit,
-        formula: rawClaim.formula,
-        sourcePage: rawClaim.source_page,
-        sourceLocation: rawClaim.source_location,
-        evidence: rawClaim.evidence,
-        verificationStatus: verifiedItem.status,
-      })
-      .returning();
-
-    const evHash = await computeSha256Hex(
-      `${rawClaim.source_document}:${rawClaim.source_page ?? ''}:${rawClaim.evidence}`,
-    );
-
-    await db.insert(evidences).values({
-      claimId: insertedClaim.id,
-      sourceName: rawClaim.source_document || 'None',
-      sourcePage: rawClaim.source_page,
-      sourceLocation: rawClaim.source_location || '',
-      evidenceHash: evHash,
-    });
-
-    await db.insert(verifications).values({
-      reportId: insertedReport.id,
-      claimId: insertedClaim.id,
-      ruleVersion: '2.0.0',
-      verifierVersion: 'stockproof-engine-2.0',
-      result: verifiedItem.status,
-      explanation: verifiedItem.explanation,
-      difference: verifiedItem.difference_label,
-      validationRule: verifiedItem.validation_rule,
-    });
-  }
-}
-
 export async function loadPostgresWorkspace(params: {
   uid: string;
   email: string;
@@ -157,7 +52,6 @@ export async function loadPostgresWorkspace(params: {
 }): Promise<WorkspacePayload> {
   try {
     const user = await getOrCreateUser(params.uid, params.email, params.name);
-    await seedInitialPostgresReportForUser(user.id);
 
     const userReports = await db
       .select()
@@ -237,7 +131,7 @@ export async function loadPostgresWorkspace(params: {
         claim_id: c.claimCode,
         claim_type: (c.claimType as FinancialClaimInput['claim_type']) || 'financial_metric',
         metric: c.metric,
-        company: comp?.name ?? DEMO_COMPANY.name,
+        company: comp?.name ?? 'Doanh nghiệp chưa xác định',
         period: c.period,
         report_type: (c.reportType as ReportType) || 'Consolidated',
         reported_value: c.reportedValue,
@@ -252,18 +146,18 @@ export async function loadPostgresWorkspace(params: {
           c.verificationStatus as FinancialClaimInput['verification_status'],
       }));
 
-      const isDemo = rep.reportCode.startsWith('RPT-DEMO-');
+      const isDemo = false;
       const { results, evidenceReport } = await buildEvidenceReport({
         report_id: rep.reportCode,
-        company: comp?.name ?? DEMO_COMPANY.name,
-        ticker: comp?.ticker ?? 'FPT',
+        company: comp?.name ?? 'Doanh nghiệp chưa xác định',
+        ticker: comp?.ticker ?? 'N/A',
         exchange: comp?.exchange ?? 'HOSE',
         reporting_period: rep.reportingPeriod,
         report_type: (rep.reportType as ReportType) || 'Consolidated',
         document_hash: rep.documentHash,
         tolerance_percent: params.tolerancePercent,
         claims: claimInputs,
-        reference_dataset: DEMO_REFERENCE_DATASET,
+        reference_dataset: [],
         human_reviews: reviewsForReport,
         blockchain_record: latestBc,
         is_demo_data: isDemo,
@@ -272,8 +166,8 @@ export async function loadPostgresWorkspace(params: {
 
       builtReports.push({
         id: rep.reportCode,
-        company_name: comp?.name ?? DEMO_COMPANY.name,
-        ticker: comp?.ticker ?? 'FPT',
+        company_name: comp?.name ?? 'Doanh nghiệp chưa xác định',
+        ticker: comp?.ticker ?? 'N/A',
         exchange: comp?.exchange ?? 'HOSE',
         original_filename: rep.originalFilename,
         file_size: 0,
@@ -311,7 +205,7 @@ export async function loadPostgresWorkspace(params: {
       active_report_id: builtReports[0]?.id ?? '',
       tolerance_percent: params.tolerancePercent,
       reports: builtReports,
-      reference_dataset: DEMO_REFERENCE_DATASET,
+      reference_dataset: [],
       activities,
       blockchain_records: allBcRecords,
       blockchain_status: params.blockchainStatus,

@@ -22,53 +22,43 @@ Buyer Agent → Seller Agent → Bộ máy xác minh StockProof → Báo cáo b�
 
 ---
 
-## 2. Kịch bản dữ liệu mẫu (`DỮ LIỆU MẪU`)
-
-Bộ dữ liệu khởi tạo mặc định: **Công ty Cổ phần FPT (DỮ LIỆU MẪU)** (`HOSE: FPT`, `FY2025`, Hợp nhất) gồm 10 chỉ tiêu:
-- **5 Đã xác minh** (bao gồm quy đổi đơn vị tự động từ `7.857.000 Triệu VND` → `7.857 Tỷ VND`)
-- **2 Sai lệch** (Vốn chủ sở hữu lấy nhầm kỳ `Q3/2025` và Tăng trưởng doanh thu sai công thức `18,5%` so với `12,3%`)
-- **1 Thiếu bằng chứng** (Nợ phải trả thiếu tài liệu nguồn và số trang)
-- **2 Cần duyệt thủ công** (Lợi nhuận thuần từ HĐKD có điều chỉnh tỷ giá Thuyết minh V.24 và Lưu chuyển tiền tệ có xung đột biên bản nội bộ)
-
----
-
-## 3. Công nghệ sử dụng
+## 2. Công nghệ sử dụng
 
 - **Giao diện (Frontend)**: React 19, TypeScript, Tailwind CSS v4, Lucide React, Ethers.js v6
 - **Máy chủ (Backend)**: Express (`server.ts`), Vite middleware, Multer, `pdfjs-dist`, `xlsx`, `pdfkit`, `@google/genai`
-- **Cơ sở dữ liệu**: PostgreSQL (Cloud SQL + Drizzle ORM tại `src/db/`) kèm tệp JSON cục bộ (`data/stockproof-demo.json`) cho chế độ Demo
+- **Cơ sở dữ liệu**: PostgreSQL (Cloud SQL + Drizzle ORM tại `src/db/`) kèm tệp JSON cục bộ (`data/stockproof-demo.json`) khi chạy ngoại tuyến
 - **Xác thực**: Firebase Authentication (Đăng nhập Google)
 - **Hợp đồng thông minh**: Solidity (`contracts/StockProofRegistry.sol`) cho Avalanche Fuji Testnet (`Chain ID 43113`)
 
 ---
 
-## 4. Danh sách API (`server.ts`)
+## 3. Danh sách API (`server.ts`)
 
 | Phương thức | Đường dẫn | Mô tả |
 | --- | --- | --- |
 | `GET` | `/api/health` | Kiểm tra tình trạng API |
 | `POST` | `/api/auth/session` | Đồng bộ phiên người dùng Firebase với PostgreSQL |
 | `GET` | `/api/workspace` | Tải danh sách báo cáo, bộ dữ liệu chuẩn, hoạt động và trạng thái Fuji |
-| `GET` | `/api/sample-report` | Tải tệp mẫu `CSV` hoặc `JSON` (`?format=csv\|json`) |
-| `POST` | `/api/reports/upload` | Tải lên PDF/XLSX/CSV/JSON, băm SHA-256, trích xuất & xác minh |
+| `POST` | `/api/reports/upload` | Tải lên PDF/XLSX/CSV/JSON, băm SHA-256, trích xuất & xác minh (hỗ trợ `?async=true`) |
+| `GET` | `/api/reports/upload-jobs/:jobId` | Kiểm tra tiến trình phân tích tài liệu bất đồng bộ |
 | `POST` | `/api/reports/:reportId/claims` | Lưu chỉnh sửa chỉ tiêu và xác minh lại |
 | `POST` | `/api/reports/:reportId/claims/:claimId/review` | Lưu quyết định HITL (`VERIFIED`, `MISMATCH`, `INSUFFICIENT EVIDENCE`) |
 | `GET` | `/api/reports/:reportId/evidence.pdf` | Tạo và tải báo cáo bằng chứng định dạng PDF |
 | `POST` | `/api/reports/:reportId/blockchain` | Lưu giao dịch Avalanche Fuji (`LIVE_FUJI_WALLET`) hoặc `DEMO_SIMULATION` |
 | `POST` | `/api/settings/tolerance` | Cập nhật ngưỡng sai số (`%`) và xác minh lại |
-| `POST` | `/api/reset` | Khôi phục kịch bản dữ liệu mẫu FPT |
+| `POST` | `/api/reset` | Đặt lại không gian làm việc về trạng thái trống ban đầu |
 | `GET` | `/api/fuji-status` | Truy vấn block mới nhất trên Avalanche Fuji RPC |
 | `GET` | `/api/contract-source` | Trả về mã nguồn `contracts/StockProofRegistry.sol` |
 
 ---
 
-## 5. Cài đặt & Chạy thử nghiệm
+## 4. Cài đặt & Chạy thử nghiệm
 
 ```bash
 # 1. Cài đặt thư viện
 npm install
 
-# 2. Cấu hình biến môi trường (tùy chọn cho Demo; cần thiết cho Gemini PDF & Cloud SQL)
+# 2. Cấu hình biến môi trường (cần thiết cho Gemini PDF OCR & Cloud SQL)
 cp .env.example .env
 
 # 3. Chạy Unit Test

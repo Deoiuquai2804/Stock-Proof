@@ -142,7 +142,7 @@ function StockProofAppShell() {
 
   const handleResetDemo = async () => {
     const res = await fetch('/api/reset', { method: 'POST' });
-    await parseApiJson(res, 'Không thể khôi phục kịch bản mẫu.');
+    await parseApiJson(res, 'Không thể đặt lại không gian làm việc.');
     await fetchWorkspace();
   };
 

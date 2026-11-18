@@ -45,14 +45,6 @@ export async function generateEvidenceReportPdf(
       .fillColor('#475569')
       .text('Xác minh mọi chỉ tiêu tài chính · Kiểm toán theo từng chỉ tiêu');
 
-    if (report.is_demo_data) {
-      doc
-        .moveDown(0.3)
-        .fontSize(9)
-        .fillColor('#B45309')
-        .text('DỮ LIỆU MẪU — Bộ dữ liệu minh họa doanh nghiệp niêm yết Việt Nam');
-    }
-
     doc.moveDown(0.8);
     doc
       .strokeColor('#CBD5E1')

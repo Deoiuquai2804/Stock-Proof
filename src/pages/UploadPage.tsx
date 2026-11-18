@@ -2,8 +2,6 @@ import React, { useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
-  Download,
-  FileSpreadsheet,
   FileText,
   Save,
   Trash2,
@@ -35,13 +33,11 @@ export function UploadPage({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
-  const [companyName, setCompanyName] = useState(
-    'Công ty Cổ phần FPT (DỮ LIỆU MẪU)',
-  );
-  const [ticker, setTicker] = useState('FPT');
-  const [reportingPeriod, setReportingPeriod] = useState('FY2025');
+  const [companyName, setCompanyName] = useState('');
+  const [ticker, setTicker] = useState('');
+  const [reportingPeriod, setReportingPeriod] = useState('');
   const [reportType, setReportType] = useState<ReportType>('Consolidated');
-  const [fiscalYear, setFiscalYear] = useState('2025');
+  const [fiscalYear, setFiscalYear] = useState('');
   const [currency, setCurrency] = useState('VND');
   const [unit, setUnit] = useState('Tỷ VND');
 
@@ -72,23 +68,6 @@ export function UploadPage({
     setDragActive(false);
     const file = e.dataTransfer.files?.[0];
     handleFileSelect(file);
-  };
-
-  const handleLoadSampleCsv = async () => {
-    setErrorMsg(null);
-    try {
-      const res = await fetch('/api/sample-report?format=csv');
-      if (!res.ok) throw new Error('Không thể tải tệp CSV mẫu.');
-      const text = await res.text();
-      const file = new File([text], 'FPT_FY2025_Sample_Claims.csv', {
-        type: 'text/csv',
-      });
-      setSelectedFile(file);
-    } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : 'Không thể nạp tệp mẫu.',
-      );
-    }
   };
 
   const handleUploadAnalyze = async (e: React.FormEvent) => {
@@ -257,35 +236,14 @@ export function UploadPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-[#F8FAFC]">
-            Tải lên báo cáo tài chính
-          </h1>
-          <p className="text-xs text-[#94A3B8] mt-1">
-            Tải lên tệp PDF, Excel (XLSX/XLS), CSV hoặc JSON. StockProof tạo mã
-            băm SHA-256 ngoài chuỗi và trích xuất các chỉ tiêu có cấu trúc.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleLoadSampleCsv}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#172033] hover:bg-slate-800 border border-slate-700 text-xs font-medium text-[#CBD5E1] whitespace-nowrap shrink-0"
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5 text-[#06B6D4]" />
-            <span>Nạp CSV mẫu</span>
-          </button>
-          <a
-            href="/api/sample-report?format=json"
-            download="FPT_FY2025_Sample_Claims.json"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#172033] hover:bg-slate-800 border border-slate-700 text-xs font-medium text-[#CBD5E1] whitespace-nowrap shrink-0"
-          >
-            <Download className="h-3.5 w-3.5 text-[#3B82F6]" />
-            <span>Tải JSON mẫu</span>
-          </a>
-        </div>
+      <div>
+        <h1 className="text-xl font-semibold text-[#F8FAFC]">
+          Tải lên báo cáo tài chính
+        </h1>
+        <p className="text-xs text-[#94A3B8] mt-1">
+          Tải lên tệp PDF, Excel (XLSX/XLS), CSV hoặc JSON. StockProof tạo mã
+          băm SHA-256 ngoài chuỗi và trích xuất các chỉ tiêu có cấu trúc.
+        </p>
       </div>
 
       <form
@@ -397,8 +355,9 @@ export function UploadPage({
                 type="text"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="VD: Công ty Cổ phần Sữa Việt Nam"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] focus:outline-none focus:border-[#3B82F6]"
+                className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] placeholder:text-slate-500 focus:outline-none focus:border-[#3B82F6]"
               />
             </label>
 
@@ -410,8 +369,9 @@ export function UploadPage({
                 type="text"
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                placeholder="VD: VNM"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] font-mono focus:outline-none focus:border-[#3B82F6]"
+                className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] font-mono placeholder:text-slate-500 focus:outline-none focus:border-[#3B82F6]"
               />
             </label>
 
@@ -423,9 +383,9 @@ export function UploadPage({
                 type="text"
                 value={reportingPeriod}
                 onChange={(e) => setReportingPeriod(e.target.value)}
-                placeholder="FY2025"
+                placeholder="VD: FY2024"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] focus:outline-none focus:border-[#3B82F6]"
+                className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] placeholder:text-slate-500 focus:outline-none focus:border-[#3B82F6]"
               />
             </label>
 
@@ -451,8 +411,9 @@ export function UploadPage({
                 type="text"
                 value={fiscalYear}
                 onChange={(e) => setFiscalYear(e.target.value)}
+                placeholder="VD: 2024"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] tabular-nums focus:outline-none focus:border-[#3B82F6]"
+                className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-slate-700 text-[#F8FAFC] tabular-nums placeholder:text-slate-500 focus:outline-none focus:border-[#3B82F6]"
               />
             </label>
 
